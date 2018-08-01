@@ -1,17 +1,15 @@
 <template>
-    <div class="flows-group">
-      <div ref="flows" class="flows">
-        <canvas ref="flowsCanvas" class="flows__canvas" :width="width" :height="height" @mousemove="mousemoveCanvas($event)"  @click="clickCanvas"  @dblclick="edit"></canvas>
-        <div class="flows__handle">
-            <input class="flows__handle-input" type="text" ref="input" :style="handleStyle" @keyup.delete="deleted">
-            <input class="flows__handle-edit-input" v-show="isHandle" v-model="form.name" :style="editInputStyle"
-              @blur="editInpuBlur($event)"
-              @focus="editInpuFocus($event)"
-            type="text" ref="editInput">
-            <i class="flows__handle-next" v-show="moveData.flag && !isHandle" :style="handleStyle" type="text" @click="next(moveData.id)"></i>
-        </div>
-      </div>
-      <p>{{activeData}}</p>
+  <div class="flows-group">
+    <div ref="flows" class="flows">
+      <canvas ref="flowsCanvas" class="flows__canvas" :width="width" :height="height" @mousemove="mousemoveCanvas($event)" @click="clickCanvas" @dblclick="edit"></canvas>
+      <input class="flows__handle-input" type="text" ref="input" :style="handleStyle" @keyup.delete="deleted">
+      <textarea rows="1" class="flows__handle-edit-textarea" v-show="isHandle" v-model="form.name" :style="editTextareaStyle" @keyup.enter="editInpuBlur($event)" @blur="editInpuBlur($event)" @focus="editInpuFocus($event)" ref="editTextarea"></textarea>
+      <i class="flows__handle-next" v-show="moveData.flag && !isHandle" :style="handleStyle" type="text" @click="next(moveData.id)"></i>
+    </div>
+    <p>移过的节点： {{moveData}}</p>
+    <p>选中的节点： {{activeData}}</p>
+    <p>选中节点数据： {{form}}</p>
+    <p>选中节点数据： {{dataArr}}</p>
   </div>
 </template>
 
@@ -34,15 +32,15 @@ export default {
     },
     nodeHeight: {
       type: Number,
-      default: 36
+      default: 30
     },
     offsetX: {
       type: Number,
-      default: 20
+      default: 12
     },
     offsetY: {
       type: Number,
-      default: 100
+      default: 80
     }
   },
   data() {
@@ -65,7 +63,7 @@ export default {
       moveData: {},
       activeData: {},
       isHandle: false,
-      editInputStyle: {}
+      editTextareaStyle: {}
     };
   },
   created() {},
@@ -93,7 +91,7 @@ export default {
     handleStyle() {
       // if (!this.moveData.flag) return "";
       let style = {};
-      style.top = this.moveData.y + 11 + "px";
+      style.top = this.moveData.y + 9 + "px";
       style.left = this.moveData.x - 8 + "px";
       return style;
     },
@@ -113,19 +111,19 @@ export default {
     },
     isHandle(val) {
       if (val) {
-        this.form = this.dataArr.nodes.find(d => d.id === this.moveData.id);
-        this.editInputStyle.width = this.nodeWidth - 2 + "px";
-        this.editInputStyle.height = this.nodeHeight - 2 + "px";
-        this.editInputStyle.top = this.activeData.y + -17 + "px";
-        this.editInputStyle.left = this.activeData.x - 49 + "px";
-        this.$refs.editInput.focus();
-        // this.$refs.editInput.select();
+        this.form = this.dataUnBind(
+          this.dataArr.nodes.find(d => d.id === this.moveData.id)
+        );
+        this.editTextareaStyle.width = this.nodeWidth - 18 + "px";
+        this.editTextareaStyle.top = this.activeData.y + -9 + "px";
+        this.editTextareaStyle.left = this.activeData.x - 42 + "px";
+        // this.$refs.editTextarea.focus();
+        this.$nextTick(() => {
+          this.$refs.editTextarea.select();
+        });
       } else {
-        this.dataArr.nodes[this.editIndex].name = this.form.name;
-        this.$emit("input", this.dataArr);
-        this.init();
-        this.draw();
-        this.form = this.dataUnBind(this.nodeData);
+        if (this.dataArr.nodes[this.editIndex].name === this.form.name) return;
+        this.save();
       }
     }
   },
@@ -235,13 +233,10 @@ export default {
     },
     // 保存
     save() {
-      if (this.isHandle) {
-        this.dataArr.nodes[this.editIndex] = JSON.parse(
-          JSON.stringify(this.form)
-        );
-      } else {
-        this.dataArr.nodes.push(this.form);
-      }
+      this.form.name = this.form.name.replace(/\n/g, "");
+      this.dataArr.nodes[this.editIndex] = JSON.parse(
+        JSON.stringify(this.form)
+      );
       this.init();
       this.draw();
       this.isHandle = false;
@@ -250,11 +245,11 @@ export default {
     },
     // 获取事件所在节点
     clickCanvas() {
-      if (this.isHandle || !this.moveData.id) return;
+      if (this.isHandle) return;
       this.activeData = this.moveData;
       this.activeData.id && this.$refs.input.focus();
       this.$emit("update:currentId", this.activeData.id);
-      this.draw(this.activeData.id);
+      this.draw(this.moveData.id);
     },
     mousemoveCanvas(e) {
       if (this.isHandle) return;
@@ -590,7 +585,7 @@ export default {
                   x: d.x,
                   y: d.y,
                   text: text,
-                  color: "#666"
+                  bgColor: "#add8e6"
                 });
             });
           });
@@ -653,15 +648,15 @@ export default {
       // 画出结构
       // console.log("开始画点");
       for (let i = 0; i < dot.length; i++) {
-        dot[i].color = "#333";
-        dot[i].textColor = "#666";
+        dot[i].bgColor = "#fec500";
+        dot[i].borderColor = "transparent";
+        dot[i].textColor = "#333";
       }
       for (let i = 0; i < dot.length; i++) {
-        id && id === dot[i].id && (dot[i].color = "#139BD4");
+        id && id === dot[i].id && (dot[i].borderColor = "#139bd4");
         this.finishNodes.length &&
           this.finishNodes.forEach(d => {
-            parseInt(d) === dot[i].id &&
-              (dot[i].textColor = dot[i].color = "#67c23a");
+            parseInt(d) === dot[i].id && (dot[i].bgColor = "#67c23a");
           });
         let d = new Step(
           ctx,
@@ -670,7 +665,8 @@ export default {
           dot[i].x,
           dot[i].y,
           dot[i].text,
-          dot[i].color,
+          dot[i].bgColor,
+          dot[i].borderColor,
           dot[i].textColor
         );
         d.drawStep();
@@ -759,12 +755,7 @@ export default {
   left: 0;
   top: 0;
 }
-.flows__handle {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 3;
-}
+
 .flows__handle-next {
   z-index: 100;
   position: absolute;
@@ -792,14 +783,16 @@ export default {
     transition: transform 0.3s ease-out, top 0.3s ease-out;
   }
 }
-.flows__handle-edit-input {
+.flows__handle-edit-textarea {
   position: relative;
   z-index: 100;
   border: 0;
-  padding: 10px;
   box-sizing: border-box;
-  font-size: 15px;
+  font-size: 14px;
   outline: none;
+  white-space: pre-wrap;
+  overflow: hidden;
+  height: 17px;
 }
 .flows__handle-input {
   position: absolute;

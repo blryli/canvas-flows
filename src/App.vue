@@ -2,7 +2,7 @@
   <div id="app">
     <h3>steps 流程图</h3>
     <button @click="$refs.flowsGroups.create()">添加节点</button>
-    <flows ref="flowsGroups" v-model="config" :nodeData="operation" :currentId.sync="currentId"></flows>
+    <flows ref="flowsGroups" v-model="config" :nodeData="operation" :currentId.sync="currentId" :finishNodes="finishNodes"></flows>
     <p>当前选中ID： {{currentId}}</p>
   </div>
 </template>
@@ -16,12 +16,13 @@ export default {
         nodes: [],
         sequenceFlows: []
       },
+      finishNodes: [],
       operation: {
         id: 0,
         name: "NEW 0"
       },
-      currentId: '',
-      dialogFormVisible: false,
+      currentId: "",
+      dialogFormVisible: false
     };
   }
 };

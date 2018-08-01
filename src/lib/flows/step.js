@@ -8,7 +8,7 @@
  * @param {Object} h
  */
 export default class step {
-  constructor(ctx, flag, id, x, y, t, color = "red", textColor = "#666", w = 100, h = 36) {
+  constructor(ctx, flag, id, x, y, t, bgColor = "#add8e6", borderColor = "transparent", textColor = "#000", w = 100, h = 30) {
     this.flag = flag;
     this.id = id;
     this.h = h;
@@ -18,18 +18,23 @@ export default class step {
     this.t = t;
     this.t = t;
     this.ctx = ctx;
-    this.color = color;
+    this.bgColor = bgColor;
+    this.borderColor = borderColor;
     this.textColor = textColor;
   }
   drawStep() {
-    this.ctx.strokeStyle = this.color;
-    this.ctx.fillStyle = this.textColor;
-    this.ctx.font = "16px Helvetica bold";
+    // this.ctx.strokeStyle = this.color;
+    this.ctx.fillStyle = this.bgColor;
+    this.ctx.lineWidth = 2.2;
+    this.ctx.strokeStyle = this.borderColor;
+    this.ctx.font = "14px Helvetica bold";
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.ctx.save();
     this.ctx.beginPath();
+    this.ctx.fillRect(this.x - this.w / 2, this.y - this.h / 2, this.w, this.h);
     this.ctx.strokeRect(this.x - this.w / 2, this.y - this.h / 2, this.w, this.h);
+    this.ctx.fillStyle = this.textColor;
     this.ctx.fillText(this.t, this.x, this.y);
   }
 }

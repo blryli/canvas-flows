@@ -1,9 +1,7 @@
 import Flows from './flows';
-import FlowsGroups from './flows-groups';
 
 const components = [
-  Flows,
-  FlowsGroups
+  Flows
 ];
 
 const install = function (Vue) {
