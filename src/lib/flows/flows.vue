@@ -1,15 +1,16 @@
 <template>
   <div class="flows-group">
-    <div ref="flows" class="flows">
+    <div ref="flows" class="flows" :style="{height: height + 'px'}">
       <canvas ref="flowsCanvas" class="flows__canvas" :width="width" :height="height" @mousemove="mousemoveCanvas($event)" @click="clickCanvas" @dblclick="edit"></canvas>
       <input class="flows__handle-input" type="text" ref="input" :style="handleStyle" @keyup.delete="deleted">
       <textarea rows="1" class="flows__handle-edit-textarea" v-show="isHandle" v-model="form.name" :style="editTextareaStyle" @keyup.enter="editInpuBlur($event)" @blur="editInpuBlur($event)" @focus="editInpuFocus($event)" ref="editTextarea"></textarea>
       <i class="flows__handle-next" v-show="moveData.flag && !isHandle" :style="handleStyle" type="text" @click="next(moveData.id)"></i>
     </div>
-    <p>移过的节点： {{moveData}}</p>
+    <!-- <p>移过的节点： {{moveData}}</p> -->
     <p>选中的节点： {{activeData}}</p>
-    <p>选中节点数据： {{form}}</p>
-    <p>选中节点数据： {{dataArr}}</p>
+    <!-- <p>选中节点数据： {{form}}</p> -->
+    <p>选中节点数据： {{value}}</p>
+    <p>选中节点数据： {{data}}</p>
   </div>
 </template>
 
@@ -103,7 +104,6 @@ export default {
   watch: {
     value() {
       if (this.isInit) {
-        this.setCanvasWidth();
         this.init();
         this.draw();
         this.isInit = false;
@@ -350,6 +350,8 @@ export default {
                   !arr[arr.length - 1].froms &&
                     (arr[arr.length - 1].froms = [flows[index].sourceRef]);
                   arr[arr.length - 1].froms.push(parseInt(flow.sourceRef));
+                  arr[arr.length - 1].from !== null &&
+                    (arr[arr.length - 1].from = null);
                 }
               }
             });
@@ -384,7 +386,92 @@ export default {
       // 计算x坐标
       this.minPosArr = [];
       this.maxPosArr = [];
+      this.getNodeTos();
+      this.addPosNodes();
       this.setNodeX();
+    },
+    // 添加占位节点
+    addPosNodes() {
+      this.data.forEach((da, idx) => {
+        if (idx === 0) return;
+        let index = 0;
+        da.forEach((d, i) => {
+          if (!d.tos) return;
+          if (d.tos.length) {
+            index += d.tos.length;
+          } else {
+            let id = d.id < -1000 ? d.id - 20000 : d.id - 10000;
+            let obj = {
+              id: id,
+              pos: true,
+              from: d.id,
+              x: d.x,
+              y: d.y + this.offsetY,
+              tos: []
+            };
+            this.data[idx + 1] && this.data[idx + 1].splice(index, 0, obj);
+            index++;
+          }
+        });
+      });
+    },
+    getNodeTos(lastRowIndex, fromIndexArr) {
+      if (this.data.length > 1) {
+        // 设置最后一行 为坐标计算起始行
+        let index = (lastRowIndex = lastRowIndex || this.data.length - 1);
+        fromIndexArr = fromIndexArr || [];
+
+        if (lastRowIndex > 0) {
+          // 当前行按来源进行分组：
+          let rowGArr = [];
+          let rowIdArr = [];
+          this.data[lastRowIndex].forEach(da => {
+            rowIdArr.push(da.id);
+          });
+          let nowRowArr = this.data[lastRowIndex];
+          let n = 0;
+          for (let i = 0; i < nowRowArr.length; i++) {
+            if (
+              !nowRowArr[i + 1] ||
+              (nowRowArr[i + 1] && nowRowArr[i].from !== nowRowArr[i + 1].from)
+            ) {
+              rowGArr.push(rowIdArr.slice(n, i + 1));
+              n = i + 1;
+            }
+          }
+          // 当前行节点来源
+          let fromArr = [];
+          this.data[lastRowIndex].forEach(d => {
+            d.froms ? fromArr.push(d.froms) : fromArr.push(d.from);
+          });
+          fromArr = Array.from(new Set(fromArr));
+
+          // 来源在上一行的位置
+          fromIndexArr = [];
+          let fromatArr = [].concat.apply([], fromArr);
+          this.data[lastRowIndex - 1].forEach((da, idx) => {
+            let tos = [];
+            this.data[lastRowIndex].forEach(d => {
+              if (d.froms) {
+                d.froms.forEach((d1, i1) => {
+                  i1 === 0 && d1;
+                });
+                d.froms[0] === da.id && tos.push(d.id);
+                // d.froms.indexOf(da.id) !== -1 && tos.push(d.id);
+              } else {
+                d.from === da.id && tos.push(d.id);
+              }
+            });
+            da.tos = tos;
+            fromatArr.forEach(d => {
+              da.id === d && fromIndexArr.push(idx);
+            });
+          });
+        }
+        lastRowIndex--;
+        if (lastRowIndex === index || lastRowIndex === 0) return;
+        this.getNodeTos(lastRowIndex, fromIndexArr);
+      }
     },
     // 从最后一行递归设置每一行的x坐标
     setNodeX(lastRowIndex) {
@@ -395,9 +482,9 @@ export default {
         if (lastRowIndex > 0) {
           // 当前行按来源进行分组：
           let rowGArr = [];
-          let rowX = [];
+          let rowIdArr = [];
           this.data[lastRowIndex].forEach(da => {
-            rowX.push(da.id);
+            rowIdArr.push(da.id);
           });
           let nowRowArr = this.data[lastRowIndex];
           let n = 0;
@@ -406,22 +493,23 @@ export default {
               !nowRowArr[i + 1] ||
               (nowRowArr[i + 1] && nowRowArr[i].from !== nowRowArr[i + 1].from)
             ) {
-              rowGArr.push(rowX.slice(n, i + 1));
+              rowGArr.push(rowIdArr.slice(n, i + 1));
               n = i + 1;
             }
           }
-          // console.log(
-          //   `当前 ${lastRowIndex} 行按来源进行分组：` + JSON.stringify(rowGArr)
-          // );
+          console.log(
+            `当前 ${lastRowIndex} 行按来源进行分组rowGArr：` +
+              JSON.stringify(rowGArr)
+          );
           // 当前行节点来源
           let fromArr = [];
           this.data[lastRowIndex].forEach(d => {
             d.froms ? fromArr.push(d.froms) : fromArr.push(d.from);
           });
           fromArr = Array.from(new Set(fromArr));
-          // console.log(
-          //   `当前 ${lastRowIndex} 行节点来源：` + JSON.stringify(fromArr)
-          // );
+          console.log(
+            `当前 ${lastRowIndex} 行节点来源fromArr：` + JSON.stringify(fromArr)
+          );
 
           // 来源在上一行的位置
           let fromIndexArr = [];
@@ -431,10 +519,11 @@ export default {
               da.id === d && fromIndexArr.push(idx);
             });
           });
-          // console.log(
-          //   `${lastRowIndex} 行来源在上一行的位置` +
-          //     JSON.stringify(fromIndexArr)
-          // );
+          fromIndexArr = Array.from(new Set(fromIndexArr));
+          console.log(
+            `${lastRowIndex} 行来源在上一行的位置fromIndexArr` +
+              JSON.stringify(fromIndexArr)
+          );
 
           // 最后一行节点x
           if (lastRowIndex === this.data.length - 1) {
@@ -450,12 +539,19 @@ export default {
                   let offsetNum = fromIndexArr[i] - fromIndexArr[i - 1]; // 偏移量
                   this.data[lastRowIndex].forEach((d, i) => {
                     if (da === d.id) {
-                      let prevNode = this.data[lastRowIndex][i - 1].x; // 上一个节点坐标
+                      let prevNode = this.data[lastRowIndex][i - 1]; // 上一个节点
+                      if(!prevNode) return;
+                      console.log('prevNode: ' + JSON.stringify(prevNode))
+                      let prevNodeX = prevNode.x; // 上一个节点坐标
+                      // if (prevNode.froms) {
+                      //   let len = prevNode.froms.length - 1;
+                      //   prevNodeX += (this.nodeWidth + this.offsetX) * len;
+                      // }
                       d.x =
                         idx === 0
-                          ? prevNode +
+                          ? prevNodeX +
                             (this.nodeWidth + this.offsetX) * offsetNum
-                          : prevNode + this.nodeWidth + this.offsetX;
+                          : prevNodeX + this.nodeWidth + this.offsetX;
                     }
                   });
                 }
@@ -467,6 +563,7 @@ export default {
             da.forEach((d, i) => {
               this.data[lastRowIndex].forEach(x => {
                 d === x.id && da.splice(i, 1, x.x);
+                // d === x.id && x.maxX && da.splice(i, 1, x.maxX);
               });
             });
           });
@@ -474,23 +571,33 @@ export default {
           this.maxPosArr.push(
             this.data[lastRowIndex][this.data[lastRowIndex].length - 1].x
           );
-          // console.log(
-          //   `当前 ${lastRowIndex} 行分组 的值x：` + JSON.stringify(rowGArr)
-          // );
+          console.log(
+            `当前 ${lastRowIndex} 行分组 的值x：` + JSON.stringify(rowGArr)
+          );
           let nodeArr = []; // 节点数组
           rowGArr.forEach(d => {
             nodeArr.push((d[0] + d[d.length - 1]) / 2);
           });
+          console.log(
+            `当前 ${lastRowIndex} 节点数组rowGArr：` + JSON.stringify(rowGArr)
+          );
           let MinArr = []; // 最小点数组
           rowGArr.forEach(d => {
             MinArr.push(d[0]);
           });
           let MaxArr = []; // 最大点数组
-          rowGArr.forEach(d => {
-            MaxArr.push(d[d.length - 1]);
+          rowGArr.forEach((d, i) => {
+            let max = d[d.length - 1];
+            // fromArr[i].length > 1 &&
+            //   (max += this.nodeWidth + this.offsetX) * (fromArr[i].length - 1);
+            MaxArr.push(max);
           });
+          console.log(`当前 ${lastRowIndex} 行最大点数组MaxArr: ` + MaxArr);
 
           // 计算上一行的节点x
+          let moreArr = [];
+          let moreStart = 0;
+          let morelength = 0;
           for (let i = 0; i < fromIndexArr.length; i++) {
             this.data[lastRowIndex - 1].forEach((da, idx) => {
               if (idx < fromIndexArr[i]) {
@@ -507,38 +614,25 @@ export default {
                 //     num
                 // );
 
-                // 最小点
-                // idx === 0 && this.minPosArr.push(da.x);
+              // 在来源节点中点
               } else if (idx === fromIndexArr[i]) {
-                // 来源对应节点
-                // idx === 0 && this.minPosArr.push(da.x);
-                // 在来源节点
-                if (typeof fromArr[i] === "number") {
-                  // 一对一
-                  da.x = nodeArr[i];
-                  // console.log(
-                  //   `上一行 ${lastRowIndex - 1} ${
-                  //     da.id
-                  //   } 在来源节点中点  位置: ` +
-                  //     da.x +
-                  //     " 中点: " +
-                  //     nodeArr[i]
-                  // );
-                } else {
-                  // 一对多
-                  fromArr[i] &&
-                    fromArr[i].forEach((d, index) => {
-                      // 最左侧坐标
-                      let len = fromArr[i].length;
-                      let startX =
-                        nodeArr[i] -
-                        ((this.nodeWidth + 50) * len +
-                          this.offsetX * (len - 1)) /
-                          2;
-                      da.x =
-                        startX + (this.nodeWidth + this.offsetX) * (index + 1);
+                fromArr.forEach((fromD, fromI) => {
+                  if (typeof fromD === "number") {
+                    da.id === fromD && (da.x = nodeArr[fromI]);
+                  } else {
+                    fromD.forEach((fD, fI) => {
+                      if (da.id === fD) {
+                        if (fromD.length === 1) {
+                          da.x = nodeArr[fromI];
+                        } else {
+                          da.x =
+                            nodeArr[fromI] +
+                            (this.nodeWidth + this.offsetX) * fI;
+                        }
+                      }
                     });
-                }
+                  }
+                });
               } else {
                 // 在来源点右侧
                 if (fromIndexArr.indexOf(idx) !== -1) return;
@@ -568,6 +662,7 @@ export default {
               let canvasMid = this.canvas.width / 2;
               let offset = Math.abs(canvasMid - this.minPos);
               d.x += offset - flowsMid;
+              d.x = Math.ceil(d.x);
 
               let text;
               this.dataArr.nodes.forEach(node => {
@@ -579,6 +674,7 @@ export default {
               //     : this.active < idx ? "#666" : "#e6a23c";
               // 生成点渲染数据
               d.id !== 3 &&
+                !d.pos &&
                 this.dot.push({
                   flag: "step",
                   id: d.id,
@@ -653,6 +749,7 @@ export default {
         dot[i].textColor = "#333";
       }
       for (let i = 0; i < dot.length; i++) {
+        if (dot[i].pos) break;
         id && id === dot[i].id && (dot[i].borderColor = "#139bd4");
         this.finishNodes.length &&
           this.finishNodes.forEach(d => {
@@ -701,9 +798,9 @@ export default {
       this.ctx = this.canvas.getContext("2d");
       this.setCanvasWidth();
       this.canvas.height =
-        this.data.length && this.data.length * 100 > 400
+        this.data.length && this.data.length * 100 > this.height
           ? this.data.length * 100
-          : 398;
+          : this.height - 2;
     },
     draw(id) {
       if (this.initDataFinish) {
@@ -713,9 +810,6 @@ export default {
       }
     },
     setCanvasWidth() {
-      console.log("maxPos:", this.maxPos);
-      console.log("flows:", this.$refs.flows.offsetHeight);
-      // this.canvas.width = Math.max(...maxPosArr) + 140;
       this.canvas.width =
         this.maxPos < this.$refs.flows.offsetWidth
           ? this.$refs.flows.offsetWidth - 2
@@ -746,7 +840,6 @@ export default {
   border: 1px solid #aaa;
   z-index: 99;
   width: 100%;
-  height: 400px;
   overflow: auto;
 }
 .flows__canvas {

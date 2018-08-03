@@ -13,8 +13,23 @@ export default {
   data() {
     return {
       config: {
-        nodes: [],
-        sequenceFlows: []
+        nodes: [
+          { id: -1, name: "NEW 1" },
+          { id: -2, name: "NEW 2" },
+          { id: -3, name: "NEW 3" },
+          { id: -4, name: "NEW 4" },
+          { id: -5, name: "NEW 5" }
+        ],
+        sequenceFlows: [
+          { sourceRef: 3, targetRef: -1 },
+          { sourceRef: -1, targetRef: -2 },
+          { sourceRef: -1, targetRef: -3 },
+          { sourceRef: -1, targetRef: -4 },
+          { sourceRef: -2, targetRef: -5 },
+          { sourceRef: -3, targetRef: -5 },
+          { sourceRef: -4, targetRef: -5 },
+        ],
+        firstProcessNodeId: -1
       },
       finishNodes: [],
       operation: {
