@@ -1,16 +1,12 @@
 <template>
   <div class="flows-group">
     <div ref="flows" class="flows" :style="{height: height + 'px'}">
-      <canvas ref="flowsCanvas" class="flows__canvas" :width="width" :height="height" @mousemove="mousemoveCanvas($event)" @click="clickCanvas" @dblclick="edit"></canvas>
+      <canvas ref="flowsCanvas" class="flows__canvas" :width="width" :height="height" @mousemove="mousemoveCanvas($event)" @click="clickCanvas" @dblclick="edit" @mouseup="mouseup($event)"></canvas>
       <input class="flows__handle-input" type="text" ref="input" :style="handleStyle" @keyup.delete="deleted">
       <textarea rows="1" class="flows__handle-edit-textarea" v-show="isHandle" v-model="form.name" :style="editTextareaStyle" @keyup.enter="editInpuBlur($event)" @blur="editInpuBlur($event)" @focus="editInpuFocus($event)" ref="editTextarea"></textarea>
-      <i class="flows__handle-next" v-show="moveData.flag && !isHandle" :style="handleStyle" type="text" @click="next(moveData.id)"></i>
+      <i class="flows__handle-next" v-show="moveData.flag && !isHandle && !isMousedown" :style="handleStyle" type="text" @click="next(moveData.id)"></i>
+      <i class="flows__handle-link" v-show="moveData.flag && !isHandle && !isMousedown" :style="linkHandleStyle" type="text" @mousedown="mousedown($event)" @mouseup="iconMouseup">-</i>
     </div>
-    <!-- <p>移过的节点： {{moveData}}</p> -->
-    <p>选中的节点： {{activeData}}</p>
-    <!-- <p>选中节点数据： {{form}}</p> -->
-    <p>选中节点数据： {{value}}</p>
-    <p>选中节点数据： {{data}}</p>
   </div>
 </template>
 
@@ -22,7 +18,7 @@ export default {
   props: {
     value: Object,
     nodeData: Object,
-    currentId: [Number, String],
+    currentName: [Number, String],
     finishNodes: {
       type: Array,
       default: () => []
@@ -51,7 +47,7 @@ export default {
       dot: [], // 点数组
       line: [], // 线条数组
       canvas: "",
-      cxt: "",
+      ctx: "",
       width: 600,
       height: 500,
       minPosArr: [], // 每列最小坐标
@@ -61,13 +57,23 @@ export default {
 
       form: this.nodeData ? this.nodeData : { id: 0, name: "NEW 0" },
       id: 0,
+      layer: "",
+      isMousedown: false,
+      saveData: {},
       moveData: {},
       activeData: {},
       isHandle: false,
       editTextareaStyle: {}
     };
   },
-  created() {},
+  created() {
+    this.$nextTick(() => {
+      this.canvas = this.$refs.flowsCanvas;
+      this.ctx = this.canvas.getContext("2d");
+      this.init();
+      this.draw();
+    });
+  },
   computed: {
     minPos() {
       return Math.min(...this.minPosArr) - this.nodeWidth / 2;
@@ -92,8 +98,15 @@ export default {
     handleStyle() {
       // if (!this.moveData.flag) return "";
       let style = {};
-      style.top = this.moveData.y + 9 + "px";
-      style.left = this.moveData.x - 8 + "px";
+      style.top = this.moveData.y + 8 + "px";
+      style.left = this.moveData.x - 20 + "px";
+      return style;
+    },
+    linkHandleStyle() {
+      // if (!this.moveData.flag) return "";
+      let style = {};
+      style.top = this.moveData.y + 8 + "px";
+      style.left = this.moveData.x + 5 + "px";
       return style;
     },
     // 编辑的索引
@@ -102,13 +115,6 @@ export default {
     }
   },
   watch: {
-    value() {
-      if (this.isInit) {
-        this.init();
-        this.draw();
-        this.isInit = false;
-      }
-    },
     isHandle(val) {
       if (val) {
         this.form = this.dataUnBind(
@@ -125,9 +131,79 @@ export default {
         if (this.dataArr.nodes[this.editIndex].name === this.form.name) return;
         this.save();
       }
+    },
+    layer(val) {
+      if (this.isMousedown) {
+        val = val.split("-");
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        let l = new Arrow(
+          this.ctx,
+          null,
+          null,
+          null,
+          this.saveData.x,
+          this.saveData.y,
+          val[0],
+          val[1],
+          "#3a8dff"
+        );
+        l.drawArrow();
+        this.draw();
+      }
     }
   },
   methods: {
+    // 连接点鼠标按下
+    mousedown(ev) {
+      if (ev.button === 0) {
+        this.isMousedown = true;
+        this.saveData = JSON.parse(JSON.stringify(this.moveData));
+      }
+    },
+    // 画布鼠标抬起
+    mouseup() {
+      this.isMousedown = false;
+      if (
+        this.moveData.id &&
+        this.saveData.id &&
+        this.moveData.id < 1000 &&
+        this.saveData.id !== this.moveData.id
+      ) {
+        if (
+          !this.dataArr.sequenceFlows.find(
+            d =>
+              d.sourceRef === this.saveData.id &&
+              d.targetRef === this.moveData.id
+          ) &&
+          !this.dataArr.sequenceFlows.find(
+            d =>
+              d.sourceRef === this.moveData.id &&
+              d.targetRef === this.saveData.id
+          )
+        ) {
+          this.dataArr.sequenceFlows.push({
+            sourceRef: this.saveData.id,
+            targetRef: this.moveData.id
+          });
+          let index = this.dataArr.sequenceFlows.findIndex(
+            d => d.sourceRef === 3 && d.targetRef === this.moveData.id
+          );
+          index !== -1 && this.dataArr.sequenceFlows.splice(index, 1);
+          this.init();
+        }
+        this.saveData = {};
+        this.draw();
+      } else {
+        this.saveData = {};
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.draw();
+      }
+    },
+    // 连接点鼠标抬起
+    iconMouseup() {
+      this.isMousedown = false;
+      this.saveData = {};
+    },
     // 添加
     create() {
       this.id = this.nowId;
@@ -177,42 +253,46 @@ export default {
     deleteLine(id) {
       this.dataArr.sequenceFlows.forEach((d, i) => {
         if (
-          d.sourceRef === this.activeData.fromId &&
-          d.targetRef === this.activeData.toId
+          parseInt(d.sourceRef) === this.activeData.fromId &&
+          parseInt(d.targetRef) === this.activeData.toId
         ) {
           // 目标是当前ID的关系删除
           this.dataArr.sequenceFlows.splice(i, 1);
+          if (
+            this.dataArr.sequenceFlows.findIndex(
+              da => parseInt(da.targetRef) === this.activeData.toId
+            ) !== -1
+          )
+            return;
           this.dataArr.sequenceFlows.push({
             sourceRef: 3,
-            targetRef: d.targetRef
+            targetRef: parseInt(d.targetRef)
           });
         }
       });
     },
     // 删除点
     deleteDot(id) {
-      let target;
-      let sourceArr = [];
-      this.dataArr.sequenceFlows.forEach((d, i) => {
-        if (d.targetRef === this.activeData.id) {
-          // 目标是当前ID的关系删除
-          target = i;
+      let dotSource = [];
+      let dotTarget = [];
+      
+      for (let i = 0; i < this.dataArr.sequenceFlows.length; i++) {
+        if (this.dataArr.sequenceFlows[i].targetRef === id) {
+          this.dataArr.sequenceFlows.splice(i, 1);
+          i = i - 1;
         }
-        if (d.sourceRef === this.activeData.id) {
-          // 来源是当前ID的添加到根节点
-          sourceArr.push({ source: i, targetRef: d.targetRef });
+      }
+      for (let i = 0; i < this.dataArr.sequenceFlows.length; i++) {
+        if (this.dataArr.sequenceFlows[i].sourceRef === id) {
+          if (this.dataArr.sequenceFlows.findIndex(da => parseInt(da.targetRef) === this.dataArr.sequenceFlows[i].targetRef) !== -1) {
+            this.dataArr.sequenceFlows.push({
+              sourceRef: 3,
+              targetRef: parseInt(this.dataArr.sequenceFlows[i].targetRef)
+            });
+          }
+          this.dataArr.sequenceFlows.splice(i, 1);
+          i = i - 1;
         }
-      });
-      this.dataArr.nodes.splice(this.editIndex, 1);
-      this.dataArr.sequenceFlows.splice(target, 1);
-      if (sourceArr.length) {
-        sourceArr.forEach(d => {
-          this.dataArr.sequenceFlows.splice(d.source, 1);
-          this.dataArr.sequenceFlows.push({
-            sourceRef: 3,
-            targetRef: d.targetRef
-          });
-        });
       }
     },
     // 删除
@@ -220,16 +300,15 @@ export default {
       if (this.isHandle) return;
       if (!this.activeData.flag) {
         // 删除线
-        this.deleteLine(this.activeData.toId, false);
+        this.deleteLine(this.activeData.id, false);
       } else {
         // 删除点
-        this.deleteDot(this.activeData.toId, true);
+        this.deleteDot(this.activeData.id, true);
       }
 
       this.init();
       this.draw();
       this.$emit("input", this.dataArr);
-      this.$emit("change", this.dataArr);
     },
     // 保存
     save() {
@@ -241,20 +320,20 @@ export default {
       this.draw();
       this.isHandle = false;
       this.$emit("input", this.dataArr);
-      this.$emit("change", this.dataArr);
     },
     // 获取事件所在节点
     clickCanvas() {
       if (this.isHandle) return;
       this.activeData = this.moveData;
       this.activeData.id && this.$refs.input.focus();
-      this.$emit("update:currentId", this.activeData.id);
+      this.$emit("update:currentName", this.activeData.name);
       this.draw(this.moveData.id);
     },
     mousemoveCanvas(e) {
       if (this.isHandle) return;
       var px = e.layerX;
       var py = e.layerY;
+      this.layer = `${px}-${py}`;
       this.moveData = { id: "" };
       // 逐条线确定是否有点中
       var offset = 5; // 可接受（偏移）范围
@@ -339,13 +418,15 @@ export default {
               if (parseInt(flow.sourceRef) === parseInt(node.id)) {
                 // 来源相同
                 if (targetRef !== parseInt(flow.targetRef)) {
-                  arr.push({
-                    id: parseInt(flow.targetRef),
-                    from: parseInt(flow.sourceRef)
-                  });
-                  targetRef = parseInt(flow.targetRef); // 去重
-                  index = i;
-                } else if (targetRef === parseInt(flow.targetRef)) {
+                  if (!arr.find(d => d.id === parseInt(flow.targetRef))) {
+                    arr.push({
+                      id: parseInt(flow.targetRef),
+                      from: parseInt(flow.sourceRef)
+                    });
+                    targetRef = parseInt(flow.targetRef); // 去重
+                    index = i;
+                  }
+                } else {
                   // 目标相同
                   !arr[arr.length - 1].froms &&
                     (arr[arr.length - 1].froms = [flows[index].sourceRef]);
@@ -358,6 +439,7 @@ export default {
         });
         if (!arr.length) {
           // 初始化点完成
+          this.dataUniq(this.data);
           this.countDotCoord(); // 计算点坐标
           return;
         }
@@ -371,9 +453,26 @@ export default {
         this.initData(opts, flows, firstNode);
       }
     },
+    // 数据去重
+    dataUniq(data, lastRowIndex) {
+      if (data.length > 1) {
+        if (lastRowIndex < 1) return;
+        lastRowIndex = lastRowIndex || data.length - 1;
+        data[lastRowIndex].forEach(d => {
+          data.forEach((da, idx) => {
+            if (idx < lastRowIndex) {
+              da.findIndex(a => a.id === d.id) !== -1 &&
+                da.splice(da.findIndex(a => a.id === d.id), 1);
+            }
+          });
+        });
+        lastRowIndex--;
+        this.dataUniq(data, lastRowIndex);
+      }
+    },
     // 计算点坐标
     countDotCoord() {
-      // 设置初始坐标
+      // 设置初始x坐标和y坐标
       this.data.forEach((da, idx) => {
         let y = idx * this.offsetY - 40;
         da.forEach(d => {
@@ -497,19 +596,19 @@ export default {
               n = i + 1;
             }
           }
-          console.log(
-            `当前 ${lastRowIndex} 行按来源进行分组rowGArr：` +
-              JSON.stringify(rowGArr)
-          );
+          // console.log(
+          //   `当前 ${lastRowIndex} 行按来源进行分组rowGArr：` +
+          //     JSON.stringify(rowGArr)
+          // );
           // 当前行节点来源
           let fromArr = [];
           this.data[lastRowIndex].forEach(d => {
             d.froms ? fromArr.push(d.froms) : fromArr.push(d.from);
           });
           fromArr = Array.from(new Set(fromArr));
-          console.log(
-            `当前 ${lastRowIndex} 行节点来源fromArr：` + JSON.stringify(fromArr)
-          );
+          // console.log(
+          //   `当前 ${lastRowIndex} 行节点来源fromArr：` + JSON.stringify(fromArr)
+          // );
 
           // 来源在上一行的位置
           let fromIndexArr = [];
@@ -520,10 +619,10 @@ export default {
             });
           });
           fromIndexArr = Array.from(new Set(fromIndexArr));
-          console.log(
-            `${lastRowIndex} 行来源在上一行的位置fromIndexArr` +
-              JSON.stringify(fromIndexArr)
-          );
+          // console.log(
+          //   `${lastRowIndex} 行来源在上一行的位置fromIndexArr` +
+          //     JSON.stringify(fromIndexArr)
+          // );
 
           // 最后一行节点x
           if (lastRowIndex === this.data.length - 1) {
@@ -540,8 +639,8 @@ export default {
                   this.data[lastRowIndex].forEach((d, i) => {
                     if (da === d.id) {
                       let prevNode = this.data[lastRowIndex][i - 1]; // 上一个节点
-                      if(!prevNode) return;
-                      console.log('prevNode: ' + JSON.stringify(prevNode))
+                      if (!prevNode) return;
+                      // console.log("prevNode: " + JSON.stringify(prevNode));
                       let prevNodeX = prevNode.x; // 上一个节点坐标
                       // if (prevNode.froms) {
                       //   let len = prevNode.froms.length - 1;
@@ -571,16 +670,16 @@ export default {
           this.maxPosArr.push(
             this.data[lastRowIndex][this.data[lastRowIndex].length - 1].x
           );
-          console.log(
-            `当前 ${lastRowIndex} 行分组 的值x：` + JSON.stringify(rowGArr)
-          );
+          // console.log(
+          //   `当前 ${lastRowIndex} 行分组 的值x：` + JSON.stringify(rowGArr)
+          // );
           let nodeArr = []; // 节点数组
           rowGArr.forEach(d => {
             nodeArr.push((d[0] + d[d.length - 1]) / 2);
           });
-          console.log(
-            `当前 ${lastRowIndex} 节点数组rowGArr：` + JSON.stringify(rowGArr)
-          );
+          // console.log(
+          //   `当前 ${lastRowIndex} 节点数组rowGArr：` + JSON.stringify(rowGArr)
+          // );
           let MinArr = []; // 最小点数组
           rowGArr.forEach(d => {
             MinArr.push(d[0]);
@@ -592,7 +691,7 @@ export default {
             //   (max += this.nodeWidth + this.offsetX) * (fromArr[i].length - 1);
             MaxArr.push(max);
           });
-          console.log(`当前 ${lastRowIndex} 行最大点数组MaxArr: ` + MaxArr);
+          // console.log(`当前 ${lastRowIndex} 行最大点数组MaxArr: ` + MaxArr);
 
           // 计算上一行的节点x
           let moreArr = [];
@@ -614,7 +713,7 @@ export default {
                 //     num
                 // );
 
-              // 在来源节点中点
+                // 在来源节点中点
               } else if (idx === fromIndexArr[i]) {
                 fromArr.forEach((fromD, fromI) => {
                   if (typeof fromD === "number") {
@@ -664,9 +763,9 @@ export default {
               d.x += offset - flowsMid;
               d.x = Math.ceil(d.x);
 
-              let text;
+              let name;
               this.dataArr.nodes.forEach(node => {
-                parseInt(node.id) === d.id && (text = node.name);
+                parseInt(node.id) === d.id && (name = node.name);
               });
               // let color =
               //   this.active > idx
@@ -678,9 +777,9 @@ export default {
                 this.dot.push({
                   flag: "step",
                   id: d.id,
+                  name: name,
                   x: d.x,
                   y: d.y,
-                  text: text,
                   bgColor: "#add8e6"
                 });
             });
@@ -712,7 +811,7 @@ export default {
                 let fromY = from.y + this.nodeHeight / 2 + 4;
                 let toY = to.y - this.nodeHeight / 2 - 4;
                 let line = {
-                  id: Math.abs(from.id) + 1000 + Math.abs(to.id),
+                  id: Math.abs(from.id) + 1000 + "-" + Math.abs(to.id),
                   fromId: from.id,
                   toId: to.id,
                   fromX: from.x,
@@ -751,6 +850,10 @@ export default {
       for (let i = 0; i < dot.length; i++) {
         if (dot[i].pos) break;
         id && id === dot[i].id && (dot[i].borderColor = "#139bd4");
+        dot[i].id === this.saveData.id && (dot[i].borderColor = "#fc06fc");
+        this.isMousedown &&
+          dot[i].id === this.moveData.id &&
+          (dot[i].borderColor = "#fc06fc");
         this.finishNodes.length &&
           this.finishNodes.forEach(d => {
             parseInt(d) === dot[i].id && (dot[i].bgColor = "#67c23a");
@@ -759,9 +862,9 @@ export default {
           ctx,
           dot[i].flag,
           dot[i].id,
+          dot[i].name,
           dot[i].x,
           dot[i].y,
-          dot[i].text,
           dot[i].bgColor,
           dot[i].borderColor,
           dot[i].textColor
@@ -794,8 +897,6 @@ export default {
     init() {
       this.initData(this.dataArr.nodes, this.dataArr.sequenceFlows);
       this.$emit("input", this.dataArr);
-      this.canvas = this.$refs.flowsCanvas;
-      this.ctx = this.canvas.getContext("2d");
       this.setCanvasWidth();
       this.canvas.height =
         this.data.length && this.data.length * 100 > this.height
@@ -804,7 +905,8 @@ export default {
     },
     draw(id) {
       if (this.initDataFinish) {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        !this.isMousedown &&
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.drawdot(this.ctx, this.dot, id);
         this.line.length && this.drawLine(this.ctx, this.line, id);
       }
@@ -824,6 +926,14 @@ export default {
         this.init();
         this.draw();
       };
+      this.$refs.flowsCanvas.addEventListener(
+        "touchmove",
+        function(e) {
+          e.preventDefault(); //禁止touchmove的默认操作（即拖动页面）
+          e.stopPropagation(); //禁止touchmove的默认操作（即拖动页面）
+        },
+        false
+      );
     });
   }
 };
@@ -855,8 +965,8 @@ export default {
   top: 0;
   left: 0;
   padding: 0px;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   color: #fff;
   border-radius: 50%;
   border: 1px solid #139bd4;
@@ -865,13 +975,43 @@ export default {
   &::before {
     content: "";
     display: block;
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-left: 2px #fff solid;
     border-bottom: 2px #fff solid;
     position: absolute;
-    top: 2px;
-    left: 3px;
+    top: 3px;
+    left: 4px;
+    transform: rotate(-45deg);
+    transition: transform 0.3s ease-out, top 0.3s ease-out;
+  }
+}
+.flows__handle-link {
+  z-index: 100;
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 0px;
+  width: 18px;
+  height: 18px;
+  line-height: 11px;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 20px;
+  font-weight: bold;
+  border: 1px solid #139bd4;
+  background-color: #139bd4;
+  cursor: pointer;
+  &::after {
+    content: "";
+    display: block;
+    width: 4px;
+    height: 4px;
+    border-right: 1.6px #fff solid;
+    border-bottom: 1.6px #fff solid;
+    position: absolute;
+    top: 4px;
+    right: 4px;
     transform: rotate(-45deg);
     transition: transform 0.3s ease-out, top 0.3s ease-out;
   }

@@ -2,8 +2,8 @@
   <div id="app">
     <h3>steps 流程图</h3>
     <button @click="$refs.flowsGroups.create()">添加节点</button>
-    <flows ref="flowsGroups" v-model="config" :nodeData="operation" :currentId.sync="currentId" :finishNodes="finishNodes"></flows>
-    <p>当前选中ID： {{currentId}}</p>
+    <flows ref="flowsGroups" v-model="config" :nodeData="operation" :currentName.sync="currentName" :finishNodes="finishNodes"></flows>
+    <p>当前选中节点： {{currentName}}</p>
   </div>
 </template>
 
@@ -18,6 +18,8 @@ export default {
           { id: -2, name: "NEW 2" },
           { id: -3, name: "NEW 3" },
           { id: -4, name: "NEW 4" },
+          { id: -6, name: "NEW 6" },
+          { id: -7, name: "NEW 7" },
           { id: -5, name: "NEW 5" }
         ],
         sequenceFlows: [
@@ -25,9 +27,11 @@ export default {
           { sourceRef: -1, targetRef: -2 },
           { sourceRef: -1, targetRef: -3 },
           { sourceRef: -1, targetRef: -4 },
+          { sourceRef: -1, targetRef: -6 },
           { sourceRef: -2, targetRef: -5 },
           { sourceRef: -3, targetRef: -5 },
           { sourceRef: -4, targetRef: -5 },
+          { sourceRef: -6, targetRef: -5 }
         ],
         firstProcessNodeId: -1
       },
@@ -36,7 +40,7 @@ export default {
         id: 0,
         name: "NEW 0"
       },
-      currentId: "",
+      currentName: "",
       dialogFormVisible: false
     };
   }

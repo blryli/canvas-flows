@@ -47,13 +47,15 @@ export default class Arrow {
     this.ctx.moveTo(arrowX, arrowY);
     this.ctx.moveTo(this.fromX, this.fromY);
     this.ctx.lineTo(this.toX, this.toY);
-    arrowX = this.toX + topX;
-    arrowY = this.toY + topY;
-    this.ctx.moveTo(arrowX, arrowY);
-    this.ctx.lineTo(this.toX, this.toY);
-    arrowX = this.toX + botX;
-    arrowY = this.toY + botY;
-    this.ctx.lineTo(arrowX, arrowY);
+    if (this.id) {
+      arrowX = this.toX + topX;
+      arrowY = this.toY + topY;
+      this.ctx.moveTo(arrowX, arrowY);
+      this.ctx.lineTo(this.toX, this.toY);
+      arrowX = this.toX + botX;
+      arrowY = this.toY + botY;
+      this.ctx.lineTo(arrowX, arrowY);
+    }
     this.ctx.strokeStyle = this.color;
     this.ctx.lineWidth = this.width;
     this.ctx.stroke();
