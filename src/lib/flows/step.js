@@ -8,7 +8,7 @@
  * @param {Object} h
  */
 export default class step {
-  constructor(ctx, flag, id, name, x, y, bgColor = "#add8e6", borderColor = "transparent", textColor = "#000", w = 100, h = 30) {
+  constructor(ctx, flag, id, name, x, y, w = 100, bgColor = "#add8e6", borderColor = "transparent", textColor = "#000", h = 30) {
     this.flag = flag;
     this.id = id;
     this.name = name;
@@ -22,7 +22,6 @@ export default class step {
     this.textColor = textColor;
   }
   drawStep() {
-    // this.ctx.strokeStyle = this.color;
     this.ctx.fillStyle = this.bgColor;
     this.ctx.lineWidth = 2.2;
     this.ctx.strokeStyle = this.borderColor;

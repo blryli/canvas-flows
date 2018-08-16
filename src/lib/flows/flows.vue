@@ -3,9 +3,9 @@
     <div ref="flows" class="flows" :style="{height: height + 'px'}">
       <canvas ref="flowsCanvas" class="flows__canvas" :width="width" :height="height" @mousemove="mousemoveCanvas($event)" @click="clickCanvas" @dblclick="edit" @mouseup="mouseup($event)"></canvas>
       <input class="flows__handle-input" type="text" ref="input" :style="handleStyle" @keyup.delete="deleted">
-      <textarea rows="1" class="flows__handle-edit-textarea" v-show="isHandle" v-model="form.name" :style="editTextareaStyle" @keyup.enter="editInpuBlur($event)" @blur="editInpuBlur($event)" @focus="editInpuFocus($event)" ref="editTextarea"></textarea>
-      <i class="flows__handle-next" v-show="moveData.flag && !isHandle && !isMousedown" :style="handleStyle" type="text" @click="next(moveData.id)"></i>
-      <i class="flows__handle-link" v-show="moveData.flag && !isHandle && !isMousedown" :style="linkHandleStyle" type="text" @mousedown="mousedown($event)" @mouseup="iconMouseup">-</i>
+      <input class="flows__handle-edit-input" v-show="isEdit" v-model="form.name" :style="editInputStyle" @keyup.enter="editInpuBlur($event)" @blur="editInpuBlur($event)" @focus="editInpuFocus($event)" ref="editInput" />
+      <i class="flows__handle-next" v-show="moveData.flag && !isEdit && !isMousedown" :style="handleStyle" type="text" @click="next(moveData.id)"></i>
+      <i class="flows__handle-link" v-show="moveData.flag && !isEdit && !isMousedown" :style="linkHandleStyle" type="text" @mousedown="mousedown($event)" @mouseup="iconMouseup">-</i>
     </div>
   </div>
 </template>
@@ -18,7 +18,15 @@ export default {
   props: {
     value: Object,
     nodeData: Object,
-    currentName: [Number, String],
+    currentNode: Object,
+    onlyLook: {
+      type: Boolean,
+      default: false
+    },
+    useInputaEdit: {
+      type: Boolean,
+      default: true
+    },
     finishNodes: {
       type: Array,
       default: () => []
@@ -52,21 +60,21 @@ export default {
       height: 500,
       minPosArr: [], // 每列最小坐标
       maxPosArr: [], // 每列最大坐标
-      initDataFinish: false,
       isInit: true,
 
       form: this.nodeData ? this.nodeData : { id: 0, name: "NEW 0" },
       id: 0,
       layer: "",
       isMousedown: false,
-      saveData: {},
-      moveData: {},
-      activeData: {},
-      isHandle: false,
-      editTextareaStyle: {}
+      saveData: {id: ''},
+      moveData: {id: ''},
+      activeData: {id: ''},
+      isEdit: false,
+      editInputStyle: {}
     };
   },
   created() {
+    // this.initDataArr();
     this.$nextTick(() => {
       this.canvas = this.$refs.flowsCanvas;
       this.ctx = this.canvas.getContext("2d");
@@ -76,10 +84,10 @@ export default {
   },
   computed: {
     minPos() {
-      return Math.min(...this.minPosArr) - this.nodeWidth / 2;
+      return Math.min(...this.minPosArr);
     },
     maxPos() {
-      return Math.max(...this.maxPosArr) + this.nodeWidth / 2;
+      return Math.max(...this.maxPosArr);
     },
     nowId() {
       let id = 0;
@@ -111,27 +119,31 @@ export default {
     },
     // 编辑的索引
     editIndex() {
-      return this.dataArr.nodes.findIndex(d => d.id === this.activeData.id);
+      return this.dataArr.nodes.findIndex(d => parseInt(d.id) === this.activeData.id);
     }
   },
   watch: {
-    isHandle(val) {
+    'form.name'(val) {
+      this.setEditInputStyle();
+    },
+    // 操作按钮定位
+    isEdit(val) {
       if (val) {
+        this.setEditInputStyle();
         this.form = this.dataUnBind(
-          this.dataArr.nodes.find(d => d.id === this.moveData.id)
+          this.dataArr.nodes.find(d => parseInt(d.id) === this.moveData.id)
         );
-        this.editTextareaStyle.width = this.nodeWidth - 18 + "px";
-        this.editTextareaStyle.top = this.activeData.y + -9 + "px";
-        this.editTextareaStyle.left = this.activeData.x - 42 + "px";
-        // this.$refs.editTextarea.focus();
+        
+        // this.$refs.editInput.focus();
         this.$nextTick(() => {
-          this.$refs.editTextarea.select();
+          this.$refs.editInput.select();
         });
       } else {
         if (this.dataArr.nodes[this.editIndex].name === this.form.name) return;
         this.save();
       }
     },
+    // 连接线条
     layer(val) {
       if (this.isMousedown) {
         val = val.split("-");
@@ -147,14 +159,48 @@ export default {
           val[1],
           "#3a8dff"
         );
+        // this.draw();// 线在上层
         l.drawArrow();
-        this.draw();
+        this.draw();// 点在上层
       }
     }
   },
   methods: {
+    // 初始化数据
+    initDataArr() {
+      let noHeadNodes = [];
+      this.dataArr.sequenceFlows.forEach(flow => {
+        !this.dataArr.sequenceFlows.find(d => d.targetRef === flow.sourceRef) && noHeadNodes.push(flow.sourceRef);
+      })
+      this.dataArr.nodes.forEach(node => {
+        !this.dataArr.sequenceFlows.find(flow => flow.sourceRef === node.id)
+          && !this.dataArr.sequenceFlows.find(flow => flow.targetRef === node.id)
+          && noHeadNodes.push(node.id)
+      })
+      noHeadNodes.forEach(d => {
+        this.dataArr.sequenceFlows.push({ sourceRef: 3, targetRef: d })
+      })
+    },
+    // 设置文本框宽度
+    setEditInputStyle() {
+      let style = {};
+      let width;
+      let actWidth = this.ctx.measureText(this.activeData.name).width;
+      let formWidth = this.ctx.measureText(this.form.name).width;
+      if (actWidth > this.nodeWidth - 20) {
+        width = formWidth > actWidth ? formWidth : actWidth;
+      } else {
+        width = formWidth > this.nodeWidth - 20 ? formWidth : this.nodeWidth - 20;
+      }
+      style.width = width + "px";
+      style.top = this.activeData.y - 12 + "px";
+      style.left = this.activeData.x - width / 2 + "px";
+      this.editInputStyle = style;
+      this.draw(this.activeData.id, width + 20);
+    },
     // 连接点鼠标按下
     mousedown(ev) {
+      if (this.onlyLook) return;
       if (ev.button === 0) {
         this.isMousedown = true;
         this.saveData = JSON.parse(JSON.stringify(this.moveData));
@@ -162,6 +208,7 @@ export default {
     },
     // 画布鼠标抬起
     mouseup() {
+      if (this.onlyLook) return;
       this.isMousedown = false;
       if (
         this.moveData.id &&
@@ -185,24 +232,23 @@ export default {
             sourceRef: this.saveData.id,
             targetRef: this.moveData.id
           });
-          let index = this.dataArr.sequenceFlows.findIndex(
-            d => d.sourceRef === 3 && d.targetRef === this.moveData.id
-          );
+          let index = this.dataArr.sequenceFlows.findIndex(d => d.sourceRef === 3 && d.targetRef === this.moveData.id);
           index !== -1 && this.dataArr.sequenceFlows.splice(index, 1);
           this.init();
         }
-        this.saveData = {};
+        this.saveData = {id: ''};
         this.draw();
       } else {
-        this.saveData = {};
+        this.saveData = {id: ''};
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.draw();
       }
     },
     // 连接点鼠标抬起
     iconMouseup() {
+      if (this.onlyLook) return;
       this.isMousedown = false;
-      this.saveData = {};
+      this.saveData = {id: ''};
     },
     // 添加
     create() {
@@ -240,14 +286,14 @@ export default {
     },
     // 编辑
     edit() {
-      if (!this.moveData.id) return;
-      this.isHandle = true;
+      if (!this.moveData.id || this.onlyLook || !this.useInputaEdit) return;
+      this.isEdit = true;
     },
     editInpuFocus(e) {
       e.currentTarget.select();
     },
     editInpuBlur() {
-      this.isHandle = false;
+      this.isEdit = false;
     },
     // 删除线
     deleteLine(id) {
@@ -256,59 +302,62 @@ export default {
           parseInt(d.sourceRef) === this.activeData.fromId &&
           parseInt(d.targetRef) === this.activeData.toId
         ) {
-          // 目标是当前ID的关系删除
           this.dataArr.sequenceFlows.splice(i, 1);
-          if (
-            this.dataArr.sequenceFlows.findIndex(
-              da => parseInt(da.targetRef) === this.activeData.toId
-            ) !== -1
-          )
-            return;
-          this.dataArr.sequenceFlows.push({
+          // 如果连接点是孤立的 添加到跟节点
+          !this.dataArr.sequenceFlows.find(da => parseInt(da.targetRef) === id)
+           && this.dataArr.sequenceFlows.push({
             sourceRef: 3,
             targetRef: parseInt(d.targetRef)
           });
         }
       });
     },
-    // 删除点
+    // 删除点操作
     deleteDot(id) {
-      let dotSource = [];
-      let dotTarget = [];
-      
+      // 删除点
+      this.dataArr.nodes.splice(this.dataArr.nodes.findIndex(d => d.id === id), 1);
+
+      // 删除把当前点当目标的线
       for (let i = 0; i < this.dataArr.sequenceFlows.length; i++) {
-        if (this.dataArr.sequenceFlows[i].targetRef === id) {
+        if (parseInt(this.dataArr.sequenceFlows[i].targetRef) === id) {
           this.dataArr.sequenceFlows.splice(i, 1);
           i = i - 1;
         }
       }
+
+      // 删除把当前点当来源的线
+      let targetArr = [];
       for (let i = 0; i < this.dataArr.sequenceFlows.length; i++) {
         if (this.dataArr.sequenceFlows[i].sourceRef === id) {
-          if (this.dataArr.sequenceFlows.findIndex(da => parseInt(da.targetRef) === this.dataArr.sequenceFlows[i].targetRef) !== -1) {
-            this.dataArr.sequenceFlows.push({
-              sourceRef: 3,
-              targetRef: parseInt(this.dataArr.sequenceFlows[i].targetRef)
-            });
-          }
+          targetArr.push(parseInt(this.dataArr.sequenceFlows[i].targetRef));
           this.dataArr.sequenceFlows.splice(i, 1);
           i = i - 1;
         }
       }
+
+      // 如果连接点是孤立的 添加到跟节点
+      targetArr.forEach(target => {
+        !this.dataArr.sequenceFlows.find(da => parseInt(da.targetRef) === target)
+          && this.dataArr.sequenceFlows.push({
+            sourceRef: 3,
+            targetRef: parseInt(target)
+          });
+      })
     },
     // 删除
     deleted() {
-      if (this.isHandle) return;
+      if (this.isEdit) return;
       if (!this.activeData.flag) {
         // 删除线
-        this.deleteLine(this.activeData.id, false);
+        this.deleteLine(this.activeData.toId);
       } else {
         // 删除点
-        this.deleteDot(this.activeData.id, true);
+        this.deleteDot(this.activeData.id);
       }
 
+      this.$emit("input", this.dataArr);
       this.init();
       this.draw();
-      this.$emit("input", this.dataArr);
     },
     // 保存
     save() {
@@ -316,21 +365,21 @@ export default {
       this.dataArr.nodes[this.editIndex] = JSON.parse(
         JSON.stringify(this.form)
       );
+      this.$emit("input", this.dataArr);
       this.init();
       this.draw();
-      this.isHandle = false;
-      this.$emit("input", this.dataArr);
+      this.isEdit = false;
     },
     // 获取事件所在节点
     clickCanvas() {
-      if (this.isHandle) return;
+      if (this.isEdit || this.onlyLook) return;
       this.activeData = this.moveData;
       this.activeData.id && this.$refs.input.focus();
-      this.$emit("update:currentName", this.activeData.name);
+      this.$emit("update:currentNode", this.activeData);
       this.draw(this.moveData.id);
     },
     mousemoveCanvas(e) {
-      if (this.isHandle) return;
+      if (this.isEdit || this.onlyLook) return;
       var px = e.layerX;
       var py = e.layerY;
       this.layer = `${px}-${py}`;
@@ -393,7 +442,7 @@ export default {
     },
     // 判断鼠标是否在节点内
     inStep(x, y, node) {
-      var offsetW = this.nodeWidth / 2;
+      var offsetW = node.width / 2;
       var offsetH = this.nodeHeight / 2;
       return (
         x &&
@@ -407,48 +456,66 @@ export default {
       return JSON.parse(JSON.stringify(obj));
     },
     // 初始化点
-    initData(opts, flows, firstNode) {
+    initData(opts, flows, firstNode, row) {
       if (firstNode) {
         let arr = [];
         let targetRef;
         let index;
+        row = row || 0;
+        row ++;
         firstNode.forEach(node => {
           flows.length &&
             flows.forEach((flow, i) => {
               if (parseInt(flow.sourceRef) === parseInt(node.id)) {
+                let isRebel = false;
+                // 多级共有连接的点 只保留最后一行的点
+                this.data.forEach((da, idx) => {
+                  if (idx !== this.data.length - 1 && da.find(d => d.id === flow.targetRef)) {
+                    isRebel = true;
+                  };
+                })
                 // 来源相同
-                if (targetRef !== parseInt(flow.targetRef)) {
-                  if (!arr.find(d => d.id === parseInt(flow.targetRef))) {
-                    arr.push({
-                      id: parseInt(flow.targetRef),
-                      from: parseInt(flow.sourceRef)
-                    });
-                    targetRef = parseInt(flow.targetRef); // 去重
-                    index = i;
+                if (!isRebel) {
+                  if (targetRef !== parseInt(flow.targetRef)) {
+                    if (!arr.find(d => parseInt(d.id) === parseInt(flow.targetRef))) {
+                      const id = parseInt(flow.targetRef);
+                      const name = node.id === 3 ? 3 : this.dataArr.nodes.find(node => node.id === parseInt(flow.targetRef)).name;
+                      const nameWidth = Math.ceil(this.ctx.measureText(name).width);
+                      const width = nameWidth + 20 > this.nodeWidth ? nameWidth + 20 : this.nodeWidth;
+                      arr.push({
+                        id: parseInt(flow.targetRef),
+                        name: name,
+                        width: width,
+                        from: parseInt(flow.sourceRef),
+                        row: row
+                      });
+                      targetRef = parseInt(flow.targetRef);
+                      index = i;
+                    }
+                  } else {
+                    // 目标相同
+                    !arr[arr.length - 1].froms &&
+                      (arr[arr.length - 1].froms = [flows[index].sourceRef]);
+                    arr[arr.length - 1].froms.push(parseInt(flow.sourceRef));
+                    arr[arr.length - 1].from !== null &&
+                      (arr[arr.length - 1].from = null);
                   }
-                } else {
-                  // 目标相同
-                  !arr[arr.length - 1].froms &&
-                    (arr[arr.length - 1].froms = [flows[index].sourceRef]);
-                  arr[arr.length - 1].froms.push(parseInt(flow.sourceRef));
-                  arr[arr.length - 1].from !== null &&
-                    (arr[arr.length - 1].from = null);
                 }
               }
             });
         });
         if (!arr.length) {
           // 初始化点完成
+          // console.log('初始化点完成');
           this.dataUniq(this.data);
           this.countDotCoord(); // 计算点坐标
           return;
         }
         this.data.push(arr);
-        this.initData(opts, flows, arr);
+        this.initData(opts, flows, arr, row);
       } else {
-        this.initDataFinish = false;
         this.data = [];
-        firstNode = [{ id: 3 }];
+        firstNode = [{ id: 3 , name: 3}];
         this.data.push(firstNode);
         this.initData(opts, flows, firstNode);
       }
@@ -499,10 +566,12 @@ export default {
           if (d.tos.length) {
             index += d.tos.length;
           } else {
-            let id = d.id < -1000 ? d.id - 20000 : d.id - 10000;
+            let id = d.id < 0 ? 10000 - d.id : d.id + 10000;
             let obj = {
               id: id,
               pos: true,
+              name: d.name,
+              width: d.width,
               from: d.id,
               x: d.x,
               y: d.y + this.offsetY,
@@ -514,6 +583,7 @@ export default {
         });
       });
     },
+    // 设置目标点
     getNodeTos(lastRowIndex, fromIndexArr) {
       if (this.data.length > 1) {
         // 设置最后一行 为坐标计算起始行
@@ -662,7 +732,6 @@ export default {
             da.forEach((d, i) => {
               this.data[lastRowIndex].forEach(x => {
                 d === x.id && da.splice(i, 1, x.x);
-                // d === x.id && x.maxX && da.splice(i, 1, x.maxX);
               });
             });
           });
@@ -670,15 +739,15 @@ export default {
           this.maxPosArr.push(
             this.data[lastRowIndex][this.data[lastRowIndex].length - 1].x
           );
-          // console.log(
-          //   `当前 ${lastRowIndex} 行分组 的值x：` + JSON.stringify(rowGArr)
-          // );
           let nodeArr = []; // 节点数组
           rowGArr.forEach(d => {
             nodeArr.push((d[0] + d[d.length - 1]) / 2);
           });
           // console.log(
-          //   `当前 ${lastRowIndex} 节点数组rowGArr：` + JSON.stringify(rowGArr)
+          //   `当前 ${lastRowIndex} 行分组 的值x：` + JSON.stringify(nodeArr)
+          // );
+          // console.log(
+          //   `当前 ${lastRowIndex} 节点数组rowGArr：` + JSON.stringify(rowGArr：)
           // );
           let MinArr = []; // 最小点数组
           rowGArr.forEach(d => {
@@ -767,12 +836,10 @@ export default {
               this.dataArr.nodes.forEach(node => {
                 parseInt(node.id) === d.id && (name = node.name);
               });
-              // let color =
-              //   this.active > idx
-              //     ? "#67c23a"
-              //     : this.active < idx ? "#666" : "#e6a23c";
+
               // 生成点渲染数据
-              d.id !== 3 &&
+              if (d.id !== 3) {
+                d.pos && (name = d.name);
                 !d.pos &&
                 this.dot.push({
                   flag: "step",
@@ -780,8 +847,10 @@ export default {
                   name: name,
                   x: d.x,
                   y: d.y,
+                  width: d.width,
                   bgColor: "#add8e6"
                 });
+              }
             });
           });
           this.dataArr.sequenceFlows.length &&
@@ -792,54 +861,29 @@ export default {
       }
     },
     // 初始化线
-    initLine(opts, flows, firstNode) {
-      let from;
-      let to;
-      if (firstNode) {
-        firstNode.forEach(node => {
-          let arr = [];
-          this.dot.forEach(d => {
-            d.id === node && (from = d);
-          });
-          flows.forEach(flow => {
-            if (parseInt(flow.sourceRef) === node) {
-              arr.push(parseInt(flow.targetRef));
-              this.dot.forEach(d => {
-                d.id === parseInt(flow.targetRef) && (to = d);
-              });
-              if (node !== 3) {
-                let fromY = from.y + this.nodeHeight / 2 + 4;
-                let toY = to.y - this.nodeHeight / 2 - 4;
-                let line = {
-                  id: Math.abs(from.id) + 1000 + "-" + Math.abs(to.id),
-                  fromId: from.id,
-                  toId: to.id,
-                  fromX: from.x,
-                  fromY: fromY,
-                  toX: to.x,
-                  toY: toY,
-                  color: "#666"
-                };
-                this.line.push(line);
-              }
-            }
-          });
-          arr = Array.from(new Set(arr));
-          if (!arr.length) {
-            // console.log("线计算完成", JSON.stringify(this.line));
-            this.initDataFinish = true;
-            return;
-          }
-          this.initLine(opts, flows, arr);
-        });
-      } else {
-        this.line = [];
-        firstNode = 3;
-        this.initLine(opts, flows, [firstNode]);
-      }
+    initLine() {
+      this.line = [];
+      this.dataArr.sequenceFlows.forEach(flow => {
+        if (flow.sourceRef === 3) return;
+        let from = this.dot.find(d => d.id === parseInt(flow.sourceRef));
+        let to = this.dot.find(d => d.id === parseInt(flow.targetRef));
+        let fromY = from.y + this.nodeHeight / 2 + 4;
+        let toY = to.y - this.nodeHeight / 2 - 4;
+        let line = {
+          id: Math.abs(from.id) + 1000 + "-" + Math.abs(to.id),
+          fromId: from.id,
+          toId: to.id,
+          fromX: from.x,
+          fromY: fromY,
+          toX: to.x,
+          toY: toY,
+          color: "#666"
+        };
+        this.line.push(line);
+      })
     },
     // 画点
-    drawdot(ctx, dot, id) {
+    drawdot(ctx, dot, id, editInputWidth) {
       // 画出结构
       // console.log("开始画点");
       for (let i = 0; i < dot.length; i++) {
@@ -858,6 +902,7 @@ export default {
           this.finishNodes.forEach(d => {
             parseInt(d) === dot[i].id && (dot[i].bgColor = "#67c23a");
           });
+        editInputWidth > this.nodeWidth && dot[i].id === this.activeData.id && (dot[i].width = editInputWidth);
         let d = new Step(
           ctx,
           dot[i].flag,
@@ -865,6 +910,7 @@ export default {
           dot[i].name,
           dot[i].x,
           dot[i].y,
+          dot[i].width,
           dot[i].bgColor,
           dot[i].borderColor,
           dot[i].textColor
@@ -903,13 +949,11 @@ export default {
           ? this.data.length * 100
           : this.height - 2;
     },
-    draw(id) {
-      if (this.initDataFinish) {
+    draw(id, editInputWidth) {
         !this.isMousedown &&
           this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.drawdot(this.ctx, this.dot, id);
+        this.drawdot(this.ctx, this.dot, id, editInputWidth);
         this.line.length && this.drawLine(this.ctx, this.line, id);
-      }
     },
     setCanvasWidth() {
       this.canvas.width =
@@ -1016,7 +1060,7 @@ export default {
     transition: transform 0.3s ease-out, top 0.3s ease-out;
   }
 }
-.flows__handle-edit-textarea {
+.flows__handle-edit-input {
   position: relative;
   z-index: 100;
   border: 0;
