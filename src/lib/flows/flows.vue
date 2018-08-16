@@ -898,7 +898,7 @@ export default {
         this.isMousedown &&
           dot[i].id === this.moveData.id &&
           (dot[i].borderColor = "#fc06fc");
-        this.finishNodes.length &&
+        this.onlyLook && this.finishNodes.length &&
           this.finishNodes.forEach(d => {
             parseInt(d) === dot[i].id && (dot[i].bgColor = "#67c23a");
           });
@@ -969,15 +969,7 @@ export default {
       window.onresize = () => {
         this.init();
         this.draw();
-      };
-      this.$refs.flowsCanvas.addEventListener(
-        "touchmove",
-        function(e) {
-          e.preventDefault(); //禁止touchmove的默认操作（即拖动页面）
-          e.stopPropagation(); //禁止touchmove的默认操作（即拖动页面）
-        },
-        false
-      );
+      }
     });
   }
 };

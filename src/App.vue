@@ -2,9 +2,9 @@
   <div id="app">
     <h3>steps 流程图</h3>
     <p>
-      <button @click="$refs.flowsGroups.create()">添加节点</button>
+      <button @click="$refs.flows.create()">添加节点</button>
     </p>
-    <flows ref="flowsGroups" v-model="config" :nodeData="operation" :currentNode.sync="currentNode" :finishNodes="finishNodes"></flows>
+    <flows ref="flows" v-model="config" :nodeData="operation"  :currentNode.sync="currentNode" :finishNodes="finishNodes"></flows>
     <p>当前选中节点： {{currentNode}}</p>
   </div>
 </template>
