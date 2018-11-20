@@ -1,5 +1,5 @@
 /**
- * 矩形步骤对象
+ * 矩形对象
  * @param {Object} ctx
  * @param {Object} x
  * @param {Object} x

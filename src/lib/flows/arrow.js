@@ -1,4 +1,5 @@
 /**
+ * 箭头对象
  * @param {Object} ctxCanvas绘图环境
  * @param {Number} fromId起始点id
  * @param {Number} fromId结束点id
