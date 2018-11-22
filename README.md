@@ -16,7 +16,7 @@ npm install canvas-flows -S
 
 ```js
 //ES6
-import canvasFlows from 'canvas-flows.js'
+import canvasFlows from 'canvas-flows'
 
 // require
 var canvasFlows = require('canvasFlows')
@@ -36,7 +36,28 @@ Vue.use(canvasFlows)
 export default {
   data () {
     return {
-      config: {},
+      config: {
+        nodes: [
+          { id: -1, name: "NEW 1" },
+          { id: -2, name: "NEW 2" },
+          { id: -3, name: "NEW 3" },
+          { id: -4, name: "NEW 4" },
+          { id: -5, name: "NEW 5" },
+          { id: -6, name: "NEW 6" },
+          { id: -7, name: "NEW 7" }
+        ],
+        sequenceFlows: [
+          { sourceRef: 3, targetRef: -1 },
+          { sourceRef: -1, targetRef: -2 },
+          { sourceRef: -1, targetRef: -3 },
+          { sourceRef: -1, targetRef: -4 },
+          { sourceRef: -1, targetRef: -6 },
+          { sourceRef: -2, targetRef: -5 },
+          { sourceRef: -3, targetRef: -5 },
+          { sourceRef: -4, targetRef: -5 },
+          { sourceRef: -6, targetRef: -5 }
+        ]
+      },
       currentNode: {},
       operation: {},
       finishNodes: []

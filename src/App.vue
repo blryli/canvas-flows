@@ -4,7 +4,7 @@
     <p>
       <button @click="$refs.flows.create()">添加节点</button>
     </p>
-    <flows ref="flows" v-model="config" :nodeData="operation"  :currentNode.sync="currentNode" :finishNodes="finishNodes"></flows>
+    <flows ref="flows" :useInputaEdit="true" v-model="config" :nodeData="operation"  :currentNode.sync="currentNode" :finishNodes="finishNodes" @edit="edit"></flows>
     <p>当前选中节点： {{currentNode}}</p>
   </div>
 </template>
@@ -42,6 +42,11 @@ export default {
       currentNode: {},
       finishNodes: []
     };
+  },
+  methods: {
+    edit(id) {
+      console.log('edit: ' + id)
+    }
   }
 };
 </script>

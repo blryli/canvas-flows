@@ -1,4 +1,3 @@
-import Arrow from "./arrow";
 export default {
   data() {
     return {
@@ -57,11 +56,12 @@ export default {
     }
   },
   watch: {
-    'form.name' (val) {
+    'form.name' () {
       this.setEditInputStyle();
     },
     // 操作按钮定位
     isEdit(val) {
+      if (!this.useInputaEdit) return;
       if (val) {
         this.setEditInputStyle();
         this.form = this.dataUnBind(
@@ -77,25 +77,20 @@ export default {
         this.save();
       }
     },
-    // 连接线条
+    // 拖动时显示线条
     layer(val) {
       if (this.isMousedown) {
         val = val.split("-");
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        let l = new Arrow(
-          this.ctx,
-          null,
-          null,
-          null,
+        this.Arrow(
           this.saveData.x,
           this.saveData.y,
           val[0],
           val[1],
-          "#3a8dff"
+          "#3a8dff",
+          false
         );
-        // this.draw();// 线在上层
-        l.drawArrow();
-        this.draw(); // 点在上层
+        this.draw(); // 画线时点在上层
       }
     }
   },
@@ -146,13 +141,20 @@ export default {
             d.targetRef === this.saveData.id
           )
         ) {
-          this.dataArr.sequenceFlows.push({
-            sourceRef: this.saveData.id,
-            targetRef: this.moveData.id
-          });
-          let index = this.dataArr.sequenceFlows.findIndex(d => d.sourceRef === 3 && d.targetRef === this.moveData.id);
-          index !== -1 && this.dataArr.sequenceFlows.splice(index, 1);
-          this.init();
+          if (parseInt(this.moveData.id) === -1) {
+            this.errorShow = true;
+            setTimeout(() => {
+              this.errorShow = false;
+            }, 1000)
+          } else {
+            this.dataArr.sequenceFlows.push({
+              sourceRef: this.saveData.id,
+              targetRef: this.moveData.id
+            });
+            let index = this.dataArr.sequenceFlows.findIndex(d => d.sourceRef === 3 && d.targetRef === this.moveData.id);
+            index !== -1 && this.dataArr.sequenceFlows.splice(index, 1);
+            this.init();
+          }
         }
         this.saveData = {
           id: ''
@@ -210,8 +212,9 @@ export default {
     },
     // 编辑
     edit() {
-      if (!this.moveData.id || this.onlyLook || !this.useInputaEdit) return;
-      this.isEdit = true;
+      if (!this.moveData.id || this.onlyLook) return;
+      this.$emit('edit', this.moveData.id)
+      this.useInputaEdit && (this.isEdit = true);
     },
     editInpuFocus(e) {
       e.currentTarget.select();
@@ -271,7 +274,7 @@ export default {
     // 删除
     deleted() {
       if (this.isEdit) return;
-      if (!this.activeData.flag) {
+      if (this.activeData.flag === 'arrow') {
         // 删除线
         this.deleteLine(this.activeData.toId);
       } else {
@@ -295,12 +298,13 @@ export default {
       this.isEdit = false;
     },
     // 获取事件所在节点
-    clickCanvas() {
+    clickCanvas(e) {
       if (this.isEdit || this.onlyLook) return;
       this.activeData = this.moveData;
       this.activeData.id && this.$refs.input.focus();
       this.$emit("update:currentNode", this.activeData);
-      this.draw(this.moveData.id);
+      this.drawLine(e);
+      this.draw(e);
     },
     mousemoveCanvas(e) {
       if (this.isEdit || this.onlyLook) return;
@@ -374,6 +378,17 @@ export default {
           }
         }
       }
+    },
+    getEventPosition(ev){
+      var x, y;
+      if (ev.layerX || ev.layerX == 0) {
+        x = ev.layerX;
+        y = ev.layerY;
+      } else if (ev.offsetX || ev.offsetX == 0) { // Opera
+        x = ev.offsetX;
+        y = ev.offsetY;
+      }
+      return {x: x, y: y};
     },
     // 判断鼠标是否在节点内
     inStep(x, y, node) {
