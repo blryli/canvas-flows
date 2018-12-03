@@ -2,9 +2,20 @@
   <div id="app">
     <h3>steps 流程图</h3>
     <p>
-      <button @click="$refs.flows.create()">添加节点</button>
+      <button @click="$refs.flows.add()">添加节点</button>
     </p>
-    <flows ref="flows" :useInputaEdit="true" v-model="config" :nodeData="operation"  :currentNode.sync="currentNode" :finishNodes="finishNodes" @edit="edit"></flows>
+    <flows
+      ref="flows"
+      v-model="config"
+      :model="form"
+      :useInputaEdit="true"
+      :fristNodeOnly="true"
+      :finishNodes="finishNodes"
+      @edit="edit"
+      @delete="deleteNode"
+      @check="check"
+      @link="link"
+    ></flows>
     <p>当前选中节点： {{currentNode}}</p>
   </div>
 </template>
@@ -35,24 +46,38 @@ export default {
           { sourceRef: -6, targetRef: -5 }
         ]
       },
-      operation: {
-        id: 0,
-        name: "NEW 0"
-      },
-      currentNode: {},
+      form: {id: '', name: '', age: '', left: {}, right: {}},
+      currentNode: "",
       finishNodes: []
     };
   },
   methods: {
-    edit(id) {
-      console.log('edit: ' + id)
+    edit(obj) {
+      console.log("edit: " + JSON.stringify(obj));
+    },
+    link(obj) {
+      console.log("link: " + JSON.stringify(obj));
+    },
+    check(name) {
+      this.currentNode = name;
+    },
+    deleteNode(val) {
+      console.log(`delete ${val}`);
+    },
+    save() {
+      this.config.nodes.splice(
+        this.config.nodes.findIndex(d => d.id === this.form.id),
+        1,
+        this.form
+      );
+      this.$refs.flows.redraw();
     }
   }
 };
 </script>
 
 <style lang="scss" scoped>
-h3{
+h3 {
   text-align: center;
 }
 </style>

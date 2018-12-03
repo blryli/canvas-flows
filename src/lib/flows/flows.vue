@@ -1,33 +1,36 @@
 <template>
   <div class="flows-group">
-    <div ref="flows" class="flows" :style="{height: height + 'px'}">
-      <canvas ref="flowsCanvas" class="flows__canvas" :width="width" :height="height" @mousemove="mousemoveCanvas($event)" @click="clickCanvas" @dblclick="edit" @mouseup="mouseup($event)"></canvas>
-      <input class="flows__handle-input" type="text" ref="input" :style="handleStyle" @keyup.delete="deleted">
-      <input class="flows__handle-edit-input" v-show="isEdit" v-model="form.name" :style="editInputStyle" @keyup.enter="editInpuBlur($event)" @blur="editInpuBlur($event)" @focus="editInpuFocus($event)" ref="editInput" />
-      <i class="flows__handle-next" v-show="moveData.flag && !isEdit && !isMousedown" :style="handleStyle" type="text" @click="next(moveData.id)"></i>
-      <i class="flows__handle-link" v-show="moveData.flag && !isEdit && !isMousedown" :style="linkHandleStyle" type="text" @mousedown="mousedown($event)" @mouseup="iconMouseup">-</i>
+    <div ref="flows" class="flows" :style="{height: height + 'px', '--lineHeight': lineHeight}">
+      <canvas ref="flowsCanvas" class="flows__canvas" :width="width" :height="height" @mousemove="mousemoveCanvas($event)" @click="clickCanvas" @dblclick="edit" @mousedown="cvsMousedown($event)" @mouseup="mouseup($event)"></canvas>
+      <input class="flows__handle-input" type="text" ref="input" :style="inputHandleStyle" @keyup.delete="deleted">
+      <textarea class="flows__handle-edit-textarea" cols="10" :rows="rows" v-show="useInputaEdit && isEdit" v-model="form.name" :style="editInputStyle" @blur="editInpuBlur($event)" @focus="editInpuFocus($event)" ref="editInput"></textarea>
+      <i class="flows__handle-next" v-show="moveData.flag && moveData.flag !== 'arrow' && !isEdit && !isLinkMousedown" :style="nextHandleStyle" type="text" @click="add(moveData.id)"></i>
+      <i class="flows__handle-link" v-show="moveData.flag && moveData.flag !== 'arrow' && !isEdit && !isLinkMousedown" :style="linkHandleStyle" type="text" @mousedown="mousedown($event)" @mouseup="iconMouseup"></i>
     </div>
     <!-- <p>moveData: {{moveData}}</p>
     <p>activeData: {{activeData}}</p>
-    <transition name="fade">
-      <div v-if="errorShow" class="flows-error">aaaaa</div>
-    </transition> -->
+    <p>saveData: {{saveData}}</p> -->
   </div>
 </template>
 
 <script>
-import Component from './component';
+import Handle from "./handle";
 import Graph from "./graph";
 import { on, off } from "../../utils/dom";
 
 export default {
   name: "flows",
-  mixins: [Component, Graph],
+  mixins: [Handle, Graph],
   props: {
-    value: Object,
-    nodeData: Object,
-    currentNode: Object,
-    onlyLook: {
+    value: {
+      type: Object,
+      default: () => {}
+    },
+    model: {
+      type: Object,
+      default: () => {}
+    },
+    readonly: {
       type: Boolean,
       default: false
     },
@@ -45,7 +48,7 @@ export default {
     },
     nodeHeight: {
       type: Number,
-      default: 30
+      default: 32
     },
     offsetX: {
       type: Number,
@@ -54,6 +57,10 @@ export default {
     offsetY: {
       type: Number,
       default: 80
+    },
+    fristNodeOnly: {
+      type: Boolean,
+      default: true
     }
   },
   data() {
@@ -65,10 +72,12 @@ export default {
       ctx: "",
       width: 600,
       height: 500,
+      lineHeight: 16,
       minPosArr: [], // 每列最小坐标
       maxPosArr: [], // 每列最大坐标
       isInit: false,
-      errorShow: false
+      errorShow: false,
+      pointOffset: {x: 0, y: 0}
     };
   },
   created() {
@@ -81,12 +90,8 @@ export default {
   watch: {
     value(val) {
       if (val && !this.isInit) {
-        console.log('watch')
-        this.resetInit();
-        this.resetInit();
-        setTimeout(() => {
-        })
-        this.isInit = true;
+        this.redraw();
+        this.redraw();
       }
     }
   },
@@ -101,7 +106,13 @@ export default {
       return this.value;
     },
     hasData() {
-      return this.dataArr && this.dataArr.nodes && this.dataArr.nodes.length && this.dataArr.sequenceFlows && this.dataArr.sequenceFlows.length;
+      return (
+        this.dataArr &&
+        this.dataArr.nodes &&
+        this.dataArr.nodes.length &&
+        this.dataArr.sequenceFlows &&
+        this.dataArr.sequenceFlows.length
+      );
     }
   },
   methods: {
@@ -110,65 +121,56 @@ export default {
       if (!this.hasData) return;
       let noHeadNodes = [];
       this.dataArr.sequenceFlows.forEach(flow => {
-        !this.dataArr.sequenceFlows.find(d => parseInt(d.targetRef) === parseInt(flow.sourceRef)) && noHeadNodes.push(flow.sourceRef);
-      })
+        !this.dataArr.sequenceFlows.find(
+          d => parseInt(d.targetRef) === parseInt(flow.sourceRef)
+        ) && noHeadNodes.push(flow.sourceRef);
+      });
       this.dataArr.nodes.forEach(node => {
-        !this.dataArr.sequenceFlows.find(flow => parseInt(flow.sourceRef) === parseInt(node.id))
-          && !this.dataArr.sequenceFlows.find(flow => parseInt(flow.targetRef) === parseInt(node.id))
-          && noHeadNodes.push(node.id)
-      })
-      noHeadNodes.length && noHeadNodes.forEach(d => {
-        this.dataArr.sequenceFlows.push({ sourceRef: 3, targetRef: d });
-      })
-      noHeadNodes.length && this.$emit('input', this.dataArr);
+        !this.dataArr.sequenceFlows.find(
+          flow => parseInt(flow.sourceRef) === parseInt(node.id)
+        ) &&
+          !this.dataArr.sequenceFlows.find(
+            flow => parseInt(flow.targetRef) === parseInt(node.id)
+          ) &&
+          noHeadNodes.push(node.id);
+      });
+      noHeadNodes.length &&
+        noHeadNodes.forEach(d => {
+          this.dataArr.sequenceFlows.push({ sourceRef: 3, targetRef: d });
+        });
+      noHeadNodes.length && this.$emit("input", this.dataArr);
     },
     // 初始化点
     initData(opts, flows, firstNode, row) {
       if (firstNode) {
         let arr = [];
-        let targetRef;
-        let index;
-        row = row || 0;
-        row ++;
+        row++;
         firstNode.forEach(node => {
-          flows && flows.length &&
+          flows &&
+            flows.length &&
             flows.forEach((flow, i) => {
               if (parseInt(flow.sourceRef) === parseInt(node.id)) {
-                let isRebel = false;
-                // 多级共有连接的点 只保留最后一行的点
-                this.data.forEach((da, idx) => {
-                  if (idx !== this.data.length - 1 && da.find(d => d.id === parseInt(flow.targetRef))) {
-                    isRebel = true;
-                  };
-                })
-                if (!isRebel) {
-                  // 来源相同
-                  if (targetRef !== parseInt(flow.targetRef)) {
-                    if (!arr.find(d => parseInt(d.id) === parseInt(flow.targetRef))) {
-                      const id = parseInt(flow.targetRef);
-                      const target = this.dataArr.nodes.find(node => parseInt(node.id) === parseInt(flow.targetRef));
-                      const name = node.id === 3 ? 3 : target.name ;
-                      const nameWidth = Math.ceil(this.ctx.measureText(name).width);
-                      const width = nameWidth + 20 > this.nodeWidth ? nameWidth + 20 : this.nodeWidth;
-                      arr.push({
-                        id: parseInt(flow.targetRef),
-                        name: name,
-                        width: width,
-                        from: parseInt(flow.sourceRef),
-                        row: row
-                      });
-                      targetRef = parseInt(flow.targetRef);
-                      index = i;
-                    }
-                  } else {
-                    // 目标相同
-                    !arr[arr.length - 1].froms &&
-                      (arr[arr.length - 1].froms = [flows[index].sourceRef]);
-                    arr[arr.length - 1].froms.push(parseInt(flow.sourceRef));
-                    arr[arr.length - 1].from !== null &&
-                      (arr[arr.length - 1].from = null);
+                // 来源相同
+                  if (
+                    !arr.find(
+                      d => parseInt(d.id) === parseInt(flow.targetRef)
+                    )
+                  ) {
+                    const id = parseInt(flow.targetRef);
+                    const target = this.dataArr.nodes.find(
+                      node => parseInt(node.id) === parseInt(flow.targetRef)
+                    );
+                    const name = node.id === 3 ? 3 : target.name;
+                    const nameWidth = Math.ceil(
+                      this.ctx.measureText(name).width
+                    );
+                    arr.push({
+                      id: id,
+                      name: name,
+                      width: nameWidth,
+                      from: parseInt(flow.sourceRef)
+                    });
                   }
-                }
               }
             });
         });
@@ -183,7 +185,7 @@ export default {
         this.initData(opts, flows, arr, row);
       } else {
         this.data = [];
-        firstNode = [{ id: 3 , name: 3}];
+        firstNode = [{ id: 3, name: 3 }];
         this.data.push(firstNode);
         this.initData(opts, flows, firstNode);
       }
@@ -209,9 +211,10 @@ export default {
     countDotCoord() {
       // 设置初始x坐标和y坐标
       this.data.forEach((da, idx) => {
-        let y = idx * this.offsetY;
+        const len = this.data.length - 1;
         da.forEach(d => {
-          let x = this.nodeWidth + this.offsetX;
+          const y = idx * this.offsetY - this.nodeHeight;
+          const x = this.nodeWidth + this.offsetX;
           d.x = x;
           d.y = y;
         });
@@ -220,36 +223,10 @@ export default {
       // 计算x坐标
       this.minPosArr = [];
       this.maxPosArr = [];
+
       this.getNodeTos();
       this.addPosNodes();
       this.setNodeX();
-    },
-    // 添加占位节点
-    addPosNodes() {
-      this.data.forEach((da, idx) => {
-        if (idx === 0) return;
-        let index = 0;
-        da.forEach((d, i) => {
-          if (!d.tos) return;
-          if (d.tos.length) {
-            index += d.tos.length;
-          } else {
-            let id = d.id < 0 ? 10000 - d.id : d.id + 10000;
-            let obj = {
-              id: id,
-              pos: true,
-              name: d.name,
-              width: d.width,
-              from: d.id,
-              x: d.x,
-              y: d.y + this.offsetY,
-              tos: []
-            };
-            this.data[idx + 1] && this.data[idx + 1].splice(index, 0, obj);
-            index++;
-          }
-        });
-      });
     },
     // 设置目标点
     getNodeTos(lastRowIndex, fromIndexArr) {
@@ -294,7 +271,6 @@ export default {
                   i1 === 0 && d1;
                 });
                 d.froms[0] === da.id && tos.push(d.id);
-                // d.froms.indexOf(da.id) !== -1 && tos.push(d.id);
               } else {
                 d.from === da.id && tos.push(d.id);
               }
@@ -309,6 +285,33 @@ export default {
         if (lastRowIndex === index || lastRowIndex === 0) return;
         this.getNodeTos(lastRowIndex, fromIndexArr);
       }
+    },
+    // 添加占位节点
+    addPosNodes() {
+      this.data.forEach((da, idx) => {
+        if (idx === 0) return;
+        let index = 0;
+        da.forEach((d, i) => {
+          if (!d.tos) return;
+          if (d.tos.length) {
+            index += d.tos.length;
+          } else {
+            let id = d.id < 0 ? 10000 - d.id : d.id + 10000;
+            let obj = {
+              id: id,
+              pos: true,
+              name: d.name,
+              width: d.width,
+              from: d.id,
+              x: d.x,
+              y: d.y + this.offsetY,
+              tos: []
+            };
+            this.data[idx + 1] && this.data[idx + 1].splice(index, 0, obj);
+            index++;
+          }
+        });
+      });
     },
     // 从最后一行递归设置每一行的x坐标
     setNodeX(lastRowIndex) {
@@ -334,19 +337,12 @@ export default {
               n = i + 1;
             }
           }
-          // console.log(
-          //   `当前 ${lastRowIndex} 行按来源进行分组rowGArr：` +
-          //     JSON.stringify(rowGArr)
-          // );
           // 当前行节点来源
           let fromArr = [];
           this.data[lastRowIndex].forEach(d => {
             d.froms ? fromArr.push(d.froms) : fromArr.push(d.from);
           });
           fromArr = Array.from(new Set(fromArr));
-          // console.log(
-          //   `当前 ${lastRowIndex} 行节点来源fromArr：` + JSON.stringify(fromArr)
-          // );
 
           // 来源在上一行的位置
           let fromIndexArr = [];
@@ -357,10 +353,6 @@ export default {
             });
           });
           fromIndexArr = Array.from(new Set(fromIndexArr));
-          // console.log(
-          //   `${lastRowIndex} 行来源在上一行的位置fromIndexArr` +
-          //     JSON.stringify(fromIndexArr)
-          // );
 
           // 最后一行节点x
           if (lastRowIndex === this.data.length - 1) {
@@ -368,9 +360,8 @@ export default {
               rowGArr[i].forEach((da, idx) => {
                 if (i === 0) {
                   // 确定第一个分组的坐标
-                  this.data[lastRowIndex].forEach(d => {
-                    da === d.id &&
-                      (d.x = (this.nodeWidth + this.offsetX) * (idx + 1));
+                  this.data[lastRowIndex].forEach((d, i) => {
+                    da === d.id && (d.x = (this.nodeWidth + this.offsetX) * (idx + 1));
                   });
                 } else {
                   let offsetNum = fromIndexArr[i] - fromIndexArr[i - 1]; // 偏移量
@@ -378,12 +369,7 @@ export default {
                     if (da === d.id) {
                       let prevNode = this.data[lastRowIndex][i - 1]; // 上一个节点
                       if (!prevNode) return;
-                      // console.log("prevNode: " + JSON.stringify(prevNode));
                       let prevNodeX = prevNode.x; // 上一个节点坐标
-                      // if (prevNode.froms) {
-                      //   let len = prevNode.froms.length - 1;
-                      //   prevNodeX += (this.nodeWidth + this.offsetX) * len;
-                      // }
                       d.x =
                         idx === 0
                           ? prevNodeX +
@@ -411,12 +397,6 @@ export default {
           rowGArr.forEach(d => {
             nodeArr.push((d[0] + d[d.length - 1]) / 2);
           });
-          // console.log(
-          //   `当前 ${lastRowIndex} 行分组 的值x：` + JSON.stringify(nodeArr)
-          // );
-          // console.log(
-          //   `当前 ${lastRowIndex} 节点数组rowGArr：` + JSON.stringify(rowGArr：)
-          // );
           let MinArr = []; // 最小点数组
           rowGArr.forEach(d => {
             MinArr.push(d[0]);
@@ -424,16 +404,10 @@ export default {
           let MaxArr = []; // 最大点数组
           rowGArr.forEach((d, i) => {
             let max = d[d.length - 1];
-            // fromArr[i].length > 1 &&
-            //   (max += this.nodeWidth + this.offsetX) * (fromArr[i].length - 1);
             MaxArr.push(max);
           });
-          // console.log(`当前 ${lastRowIndex} 行最大点数组MaxArr: ` + MaxArr);
 
           // 计算上一行的节点x
-          let moreArr = [];
-          let moreStart = 0;
-          let morelength = 0;
           for (let i = 0; i < fromIndexArr.length; i++) {
             this.data[lastRowIndex - 1].forEach((da, idx) => {
               if (idx < fromIndexArr[i]) {
@@ -441,14 +415,6 @@ export default {
                 if (fromIndexArr.indexOf(idx) !== -1) return;
                 let num = fromIndexArr[i] - idx; // 间隔数
                 da.x = MinArr[i] - (this.nodeWidth + this.offsetX) * num;
-                // console.log(
-                //   `上一行 ${lastRowIndex - 1} ${da.id} 在来源节点左侧  位置: ` +
-                //     da.x +
-                //     " 最小点: " +
-                //     MinArr[i] +
-                //     " 间隔数: " +
-                //     num
-                // );
 
                 // 在来源节点中点
               } else if (idx === fromIndexArr[i]) {
@@ -474,14 +440,6 @@ export default {
                 if (fromIndexArr.indexOf(idx) !== -1) return;
                 let num = Math.abs(idx - fromIndexArr[i]); // 间隔数
                 da.x = MaxArr[i] + (this.nodeWidth + this.offsetX) * num;
-                // console.log(
-                //   `上一行 ${lastRowIndex - 1} ${da.id} 在来源节点右侧  位置: ` +
-                //     da.x +
-                //     " 最大点: " +
-                //     MaxArr[i] +
-                //     " 间隔数: " +
-                //     num
-                // );
               }
             });
           }
@@ -491,45 +449,29 @@ export default {
           // x坐标计算完成
           // console.log("点坐标计算完成", JSON.stringify(this.data));
           this.dot = [];
+          let fristNodeHeight = this.nodeHeight;
           this.data.forEach((da, idx) => {
             da.forEach((d, i) => {
-              // 整体调整坐标居中
-              let flowsMid = (this.maxPos - this.minPos) / 2;
-              let canvasMid = this.canvas.width / 2;
-              let offset = Math.abs(canvasMid - this.minPos);
-              d.x += offset - flowsMid;
-              d.x = Math.ceil(d.x);
-
-              let name;
-              this.dataArr.nodes.forEach(node => {
-                parseInt(node.id) === d.id && (name = node.name);
-              });
-
+              if (this.$refs.flows && this.maxPos > this.$refs.flows.offsetWidth) {
+                d.x -= this.nodeWidth / 2;
+              } else {
+              // 整体坐标居中
+                const flowsMid = (this.maxPos - this.minPos) / 2;
+                const canvasMid = this.canvas.width / 2;
+                d.x += Math.ceil(canvasMid - this.minPos - flowsMid);
+                this.pointOffset.x = Math.ceil(canvasMid - this.minPos - flowsMid);
+              }
+              const node = this.dataArr.nodes.find(node => parseInt(node.id) === d.id);
+              let name = node && node.name;
+              const width = this.nodeWidth;
+              let height = d.height = name && this.nodeHeight + (this.textRows(name) - 1) * this.lineHeight;
+              d.id === -1 && d.height > this.nodeHeight && (fristNodeHeight = d.height);
+              fristNodeHeight && (d.y += (fristNodeHeight - this.nodeHeight) / 2);
               // 生成点渲染数据
               if (d.id !== 3) {
                 d.pos && (name = d.name);
                 if (!d.pos) {
-                  if (d.id === -1) {
-                    this.dot.push({
-                      flag: "round",
-                      id: d.id,
-                      name: name,
-                      x: d.x,
-                      y: d.y,
-                      width: d.width,
-                      bgColor: "#79C900"
-                    });
-                  } else {
-                    this.dot.push({
-                      flag: "step",
-                      id: d.id,
-                      name: name,
-                      x: d.x,
-                      y: d.y,
-                      width: d.width,
-                      bgColor: "#add8e6"
-                    });
-                  }
+                  this.dot.push({flag: "roundRect",id: d.id,name: name,x: d.x,y: d.y,width: width,height: height,tos: d.tos});
                 }
               }
             });
@@ -548,10 +490,10 @@ export default {
         let from = this.dot.find(d => d.id === parseInt(flow.sourceRef));
         let to = this.dot.find(d => d.id === parseInt(flow.targetRef));
         if (flow.sourceRef === 3 || !from || !to) return;
-        let fromY = from.y + this.nodeHeight / 2 + 4;
-        let toY = to.y - this.nodeHeight / 2 - 4;
+        let fromY = from.y + from.height / 2;
+        let toY = to.y - to.height / 2;
         let line = {
-          flag: 'arrow',
+          flag: "arrow",
           id: Math.abs(from.id) + 1000 + "-" + Math.abs(to.id),
           fromId: from.id,
           toId: to.id,
@@ -559,122 +501,140 @@ export default {
           fromY: fromY,
           toX: to.x,
           toY: toY,
-          color: "#666"
+          tos: from.tos
         };
         this.line.push(line);
-      })
+      });
     },
     // 画点
-    drawdot(e) {
-      // 画出结构
+    drawdot(e, event) {
       // console.log("开始画点");
-      const dot = this.dot;
-      const id = this.moveData.id;
-      for (let i = 0; i < dot.length; i++) {
-        dot[i].bgColor = "#fec500";
-        dot[i].borderColor = "transparent";
-        dot[i].textColor = "#333";
-      }
-      for (let i = 0; i < dot.length; i++) {
-        if (dot[i].pos) break;
-        id && id === dot[i].id && (dot[i].borderColor = "#139bd4");
-        dot[i].id === this.saveData.id && (dot[i].borderColor = "#fc06fc");
-        this.isMousedown &&
-          dot[i].id === this.moveData.id &&
-          (dot[i].borderColor = "#fc06fc");
-        this.finishNodes.length &&
-          this.finishNodes.forEach(d => {
-            parseInt(d) === dot[i].id && (dot[i].bgColor = "#67c23a");
-          });
-        const editInputWidth = this.ctx.measureText(this.activeData.name).width;
-        editInputWidth > this.nodeWidth && dot[i].id === this.activeData.id && (dot[i].width = editInputWidth);
-        if (dot[i].flag === 'step') {
-          this.Step(
-            dot[i].x,
-            dot[i].y,
-            dot[i].width,
-            dot[i].name,
-            dot[i].bgColor,
-            dot[i].borderColor,
-            dot[i].textColor
-          );
+      this.dot.forEach(d => {
+        if (d.id === -1) {
+          d.bgColor = "#FF794B";
+          d.borderColor = "transparent";
+          d.textColor = "#333";
         } else {
-          this.Round(
-            dot[i].x,
-            dot[i].y,
-            dot[i].r,
-            dot[i].name,
-            dot[i].bgColor,
-            dot[i].borderColor,
-            dot[i].textColor
-          );
+          d.bgColor = "#fec500";
+          d.borderColor = "transparent";
+          d.textColor = "#333";
         }
+      });
+      this.moveDot = false;
+      this.clickDot = false;
+      this.dot.forEach(d => {
+        if (d.pos) return;
+        this.activeData.id && this.activeData.id === d.id && (d.borderColor = "#139bd4");
+        d.id === this.saveData.id && (d.borderColor = "#fc06fc");
+        this.isLinkMousedown &&
+          d.id === this.moveData.id &&
+          (d.borderColor = "#fc06fc");
+        this.finishNodes.length &&
+          this.finishNodes.forEach(o => {
+            parseInt(o) === d.id && (d.bgColor = "#67c23a");
+          });
+        this.RoundRect(d.x, d.y, d.width, d.height, d.name, 4, d.bgColor, d.borderColor, d.textColor, this.lineHeight);
         const p = e && this.getEventPosition(e);
-        if(p && this.ctx.isPointInPath(p.x, p.y)){
-          // console.log('step 点击了图形')
+        if (p && event && this.ctx.isPointInPath(p.x, p.y)) {
+          if (event === "move") {
+            this.moveData = d;
+            this.moveDot = true;
+          } else if (event === "click") {
+            this.activeData = d;
+            this.clickDot = true;
+            this.downPosition = this.getEventPosition(e);
+          } else if (event === "down") {
+            this.activeData = d;
+            this.clickDot = true;
+          }
         }
-      }
+      });
     },
     // 画线
-    drawLine(e) {
+    drawLine(e, event, color) {
       // console.log("开始画线");
-      const line = this.line;
-      const id = this.moveData.id;
-      for (let i = 0; i < line.length; i++) {
-        line[i].color = "#666";
-      }
-      for (let i = 0; i < line.length; i++) {
-        id && id === line[i].id && (line[i].color = "#139BD4");
-        this.Arrow(
-          line[i].fromX,
-          line[i].fromY,
-          line[i].toX,
-          line[i].toY,
-          line[i].color
-        );
-        // console.log('arrow 点击了图形')
+      this.line.forEach(d => {
+        d.color = '#666';
+        d.activeColor = "transparent";
+      });
+      this.moveLine = false;
+      this.clickLine = false;
+      this.line.forEach(d => {
+        this.activeData.id && this.activeData.id === d.id && (d.activeColor = "#139BD4");
+        this.Arrow(d.fromX, d.fromY, d.toX, d.toY, d.tos, d.color, d.activeColor);
         const p = e && this.getEventPosition(e);
-        if(p && this.ctx.isPointInPath(p.x, p.y)){
-          // console.log('arrow 点击了图形')
+        if (
+          p &&
+          event &&
+          (this.ctx.isPointInPath(p.x, p.y) || this.ctx.isPointInStroke(p.x, p.y))
+        ) {
+          if (event === "move") {
+            this.moveData = d;
+            this.moveLine = true;
+          } else if (event === "click") {
+            this.activeData = d;
+            this.clickLine = true;
+          } else if (event === "down") {
+            this.activeData = d;
+            this.clickDot = true;
+          }
         }
+      });
+      if (this.isLinkMousedown) {
+        this.Line(
+          this.saveData.x,
+          this.saveData.y,
+          this.movePosition.x,
+          this.movePosition.y,
+          "#3a8dff"
+        );
       }
     },
     init() {
       this.initData(this.dataArr.nodes, this.dataArr.sequenceFlows);
       this.$emit("input", this.dataArr);
       this.setCanvasWidth();
-      this.canvas.height =
-        this.data.length && this.data.length * 100 > this.height
-          ? this.data.length * 100
-          : this.height - 2;
     },
-    draw(e) {
-        !this.isMousedown && this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.line.length && this.drawLine(e);
-        this.dot.length && this.drawdot(e);
+    draw(e, event) {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      this.dot.length && this.drawdot(e, event);
+      this.drawLine(e, event);
     },
-    resetInit() {
+    redraw() {
       if (!this.hasData) return;
       this.init();
       this.draw();
     },
     setCanvasWidth() {
       if (!this.$refs.flows) return;
-      this.canvas.width =
-        this.maxPos < this.$refs.flows.offsetWidth
-          ? this.$refs.flows.offsetWidth - 2
-          : this.maxPos + 60;
+      const lastNode = this.data[this.data.length - 1].find(d => !d.pos);
+      const lastY = lastNode.y + lastNode.height / 2;
+      if (lastY > this.height) {
+        this.canvas.height = lastY + this.offsetY / 2;
+        this.$refs.flows.style.overflowY = 'auto';
+      } else {
+        this.canvas.height = this.height - 2;
+        this.$refs.flows.style.overflowY = 'hidden';
+      }
+      if (this.maxPos > this.$refs.flows.offsetWidth) {
+        this.canvas.width = this.maxPos + this.offsetX;
+        this.$refs.flows.style.overflowX = 'auto';
+      } else {
+        this.canvas.width = this.$refs.flows.offsetWidth - 2;
+        this.$refs.flows.style.overflowX = 'hidden';
+      }
     }
   },
   mounted() {
     this.$nextTick(() => {
-      this.resetInit();
-      this.resetInit();
-      on(window, "resize", this.resetInit);
+      this.redraw();
+      this.redraw();
+      on(window, "resize", this.redraw);
+      this.isInit = true;
     });
   },
   destroyed() {
-    off(window, "resize", this.resetInit);
+    off(window, "resize", this.redraw);
   }
 };
 </script>
@@ -691,8 +651,7 @@ export default {
   border: 1px solid #aaa;
   z-index: 99;
   width: 100%;
-  overflow: auto;
-  i{
+  i {
     font-family: "Microsoft YaHei", "\5FAE\8F6F\96C5\9ED1", Arial, sans-serif;
   }
 }
@@ -716,6 +675,7 @@ export default {
   border: 1px solid #139bd4;
   background-color: #139bd4;
   cursor: pointer;
+  user-select: none;
   &::before {
     content: "";
     display: block;
@@ -746,6 +706,17 @@ export default {
   border: 1px solid #139bd4;
   background-color: #139bd4;
   cursor: pointer;
+  user-select: none;
+  &::before{
+    content: "";
+    display: block;
+    position: absolute;
+    top: 6px;
+    left: 3px;
+    width: 5px;
+    height: 1.6px;
+    background-color: #fff;
+  }
   &::after {
     content: "";
     display: block;
@@ -760,37 +731,24 @@ export default {
     transition: transform 0.3s ease-out, top 0.3s ease-out;
   }
 }
-.flows__handle-edit-input {
+.flows__handle-edit-textarea {
   position: relative;
   z-index: 100;
   border: 0;
   box-sizing: border-box;
   font-size: 14px;
+  padding: 1px;
   outline: none;
-  white-space: pre-wrap;
-  overflow: hidden;
-  height: 17px;
+  word-wrap:break-word;
+  line-height: var(--lineHeight + 'px');
+  overflow: auto;
 }
 .flows__handle-input {
   position: absolute;
   top: 0;
   left: 0;
+  width: 1px;
   z-index: 0;
   opacity: 0;
-}
-.flows-error{
-  position: absolute;
-  top: 0px;
-  left: 50%;
-  transform: translate(-50%, 0);
-  color: #f56c6c;
-}
-.fade-enter-active, .fade-leave-active {
-  transition: opacity top .5s;
-  top: -30px;
-}
-.fade-enter, .fade-leave-to {
-  opacity: 0;
-  // top: 0;
 }
 </style>
