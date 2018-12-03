@@ -215,7 +215,6 @@ export default {
     },
     // input 保存
     inputSave() {
-      // this.form.name = this.form.name.replace(/\n/g, <br />);
       this.dataArr.nodes.splice(this.editIndex, 1, this.form);;
       this.$emit("input", this.dataArr);
       this.redraw();

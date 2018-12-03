@@ -91,7 +91,7 @@ export default {
     value(val) {
       if (val && !this.isInit) {
         this.redraw();
-        this.redraw();
+        this.isInit = true;
       }
     }
   },
@@ -450,12 +450,13 @@ export default {
           // console.log("点坐标计算完成", JSON.stringify(this.data));
           this.dot = [];
           let fristNodeHeight = this.nodeHeight;
+          this.setCanvasWidth();
           this.data.forEach((da, idx) => {
             da.forEach((d, i) => {
-              if (this.$refs.flows && this.maxPos > this.$refs.flows.offsetWidth) {
+              if (this.$refs.flows && this.maxPos > this.canvas.width) {
                 d.x -= this.nodeWidth / 2;
               } else {
-              // 整体坐标居中
+                // 整体坐标居中
                 const flowsMid = (this.maxPos - this.minPos) / 2;
                 const canvasMid = this.canvas.width / 2;
                 d.x += Math.ceil(canvasMid - this.minPos - flowsMid);
@@ -593,7 +594,7 @@ export default {
     init() {
       this.initData(this.dataArr.nodes, this.dataArr.sequenceFlows);
       this.$emit("input", this.dataArr);
-      this.setCanvasWidth();
+      this.setCanvasHeight();
     },
     draw(e, event) {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -607,6 +608,16 @@ export default {
     },
     setCanvasWidth() {
       if (!this.$refs.flows) return;
+      if (this.maxPos > this.$refs.flows.offsetWidth) {
+        this.canvas.width = this.maxPos + this.offsetX;
+        this.$refs.flows.style.overflowX = 'auto';
+      } else {
+        this.canvas.width = this.$refs.flows.offsetWidth - 2;
+        this.$refs.flows.style.overflowX = 'hidden';
+      }
+    },
+    setCanvasHeight() {
+      if (!this.$refs.flows) return;
       const lastNode = this.data[this.data.length - 1].find(d => !d.pos);
       const lastY = lastNode.y + lastNode.height / 2;
       if (lastY > this.height) {
@@ -616,21 +627,12 @@ export default {
         this.canvas.height = this.height - 2;
         this.$refs.flows.style.overflowY = 'hidden';
       }
-      if (this.maxPos > this.$refs.flows.offsetWidth) {
-        this.canvas.width = this.maxPos + this.offsetX;
-        this.$refs.flows.style.overflowX = 'auto';
-      } else {
-        this.canvas.width = this.$refs.flows.offsetWidth - 2;
-        this.$refs.flows.style.overflowX = 'hidden';
-      }
     }
   },
   mounted() {
     this.$nextTick(() => {
       this.redraw();
-      this.redraw();
       on(window, "resize", this.redraw);
-      this.isInit = true;
     });
   },
   destroyed() {
