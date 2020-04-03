@@ -112,6 +112,7 @@ export default {
     },
     // 画布鼠标按下
     cvsMousedown(e) {
+      if (this.readonly) return;
       if (e.button === 0) {
         this.isCvsMousedown = true;
         this.draw(e, 'down');

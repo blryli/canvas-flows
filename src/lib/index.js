@@ -5,15 +5,24 @@ const components = [
   Flows
 ];
 
-const install = function (Vue) {
-  components.map(component => {
-    Vue.component(component.name, component);
-  });
-  Vue.prototype.$info = Info;
-};
-
-if (typeof window !== 'undefined' && window.Vue) {
-  install(window.Vue);
+const plugin = {
+  install(Vue, opts = {}) {
+    components.forEach(component => {
+      Vue.component(component.name, component)
+    })
+    Vue.prototype.$info = Info;
+  }
 }
 
-export default install;
+// Auto-install
+let GlobalVue = null
+if (typeof window !== 'undefined') {
+  GlobalVue = window.Vue
+} else if (typeof global !== 'undefined') {
+  GlobalVue = global.Vue
+}
+if (GlobalVue) {
+  GlobalVue.use(plugin)
+}
+
+export default plugin

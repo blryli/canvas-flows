@@ -19,7 +19,7 @@ import Graph from "./graph";
 import { on, off } from "../../utils/dom";
 
 export default {
-  name: "flows",
+  name: "Flows",
   mixins: [Handle, Graph],
   props: {
     value: {
